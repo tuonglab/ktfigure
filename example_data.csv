@@ -1,0 +1,17 @@
+temperature,sales,season,region
+20,100,Spring,North
+25,150,Summer,North
+15,80,Fall,North
+10,60,Winter,North
+22,120,Spring,South
+28,180,Summer,South
+18,95,Fall,South
+12,70,Winter,South
+21,110,Spring,East
+26,160,Summer,East
+16,85,Fall,East
+11,65,Winter,East
+23,130,Spring,West
+27,170,Summer,West
+17,90,Fall,West
+13,75,Winter,West
