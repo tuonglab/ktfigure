@@ -2126,8 +2126,6 @@ class KTFigure:
         self.root.bind("<KeyRelease-Shift_R>", lambda e: self._on_shift(False))
 
         # Keyboard shortcuts (platform-aware)
-        import sys
-
         cmd_key = "Command" if sys.platform == "darwin" else "Control"
 
         self.root.bind(f"<{cmd_key}-z>", lambda e: self._undo())
@@ -2232,8 +2230,6 @@ class KTFigure:
         """Check if Cmd (macOS) or Ctrl (other) is pressed from event state."""
         # Bit 2 (0x0004) = Control key on all platforms
         # Bit 3 (0x0008) = Command key on macOS
-        import sys
-
         if sys.platform == "darwin":
             return (event.state & 0x0008) != 0  # Command key on macOS
         else:
@@ -2449,9 +2445,6 @@ class KTFigure:
 
     def _edit_text(self, text_obj: TextObject):
         """Open a dialog to edit text object properties."""
-        from tkinter import simpledialog, colorchooser, tk as tkinter_tk
-        import tkinter as tk_module
-
         # Create a custom dialog window
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Edit Text {text_obj.tid}")
@@ -2755,7 +2748,6 @@ class KTFigure:
 
     def _auto_theme_check(self):
         """Auto-switch light/dark by time of day unless user has overridden."""
-        import datetime
         if not self._theme_manual_override:
             hour = datetime.datetime.now().hour
             should_dark = hour >= 19 or hour < 7
@@ -3602,8 +3594,6 @@ class KTFigure:
 
                 # Apply Shift constraint for 45-degree angles
                 if self._shift_pressed:
-                    import math
-
                     dx = bx - anchor_x
                     dy = by - anchor_y
                     angle = math.degrees(math.atan2(dy, dx)) % 360
@@ -3721,8 +3711,6 @@ class KTFigure:
 
             # Apply Shift constraints
             if self._shift_pressed:
-                import math
-
                 if self._mode == "draw_line":
                     # Snap line to 45-degree angles
                     dx = bx - sx
@@ -3967,8 +3955,6 @@ class KTFigure:
 
             # Apply Shift constraints (same as in _mouse_drag)
             if self._shift_pressed:
-                import math
-
                 if self._mode == "draw_line":
                     # Snap line to 45-degree angles
                     dx = bx - sx
@@ -3989,8 +3975,6 @@ class KTFigure:
 
             # For lines, check distance; for shapes, check width/height
             if self._mode == "draw_line":
-                import math
-
                 dist = math.sqrt((bx - sx) ** 2 + (by - sy) ** 2)
                 if dist < 10:
                     self._set_status("Line too short — please drag at least 10 px.")
@@ -4818,9 +4802,6 @@ class KTFigure:
             PlotRenderer.render_to_ax(block, ax, fig)
 
         # Render shapes
-        from matplotlib.patches import Rectangle, Circle
-        from matplotlib.lines import Line2D
-
         ax_main = fig.add_axes([0, 0, 1, 1], frameon=False)
         ax_main.set_xlim(0, A4_W)
         ax_main.set_ylim(0, A4_H)
@@ -4848,8 +4829,6 @@ class KTFigure:
                 ax_main.add_patch(rect)
             elif shape.shape_type == "circle":
                 # Use Ellipse for circles/ovals
-                from matplotlib.patches import Ellipse
-
                 cx = (shape.x1 + shape.x2) / 2
                 cy = (shape.y1 + shape.y2) / 2
                 w = shape.x2 - shape.x1
@@ -4977,8 +4956,6 @@ SUPPORTED PLOT TYPES
 # ---------------------------------------------------------------------------
 def main():
     if not PIL_AVAILABLE:
-        import sys
-
         print("=" * 60)
         print("ERROR: Pillow is required.")
         print("Please run:  pip install pillow")
@@ -4987,13 +4964,9 @@ def main():
 
     # Set process title on macOS to show "ktfigure" in dock/menu instead of "python3.12"
     try:
-        import sys
-        import ctypes
-
         if sys.platform == "darwin":
             # macOS: Use objc to set the process title
             from Foundation import NSProcessInfo
-            import os
 
             pid = os.getpid()
             # Try to set the process name via libc
@@ -5015,8 +4988,6 @@ def main():
 
     # Set app icon
     try:
-        import os
-
         script_dir = os.path.dirname(os.path.abspath(__file__))
         icon_path = os.path.join(script_dir, "ktfigure_logo.png")
         if os.path.exists(icon_path):
