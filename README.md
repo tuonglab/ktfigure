@@ -36,14 +36,6 @@
 
 **Requirements:** Python 3.10 or higher
 
-### From PyPI
-
-```bash
-pip install ktfigure
-```
-
-### From source
-
 ```bash
 git clone https://github.com/tuonglab/ktfigure.git
 cd ktfigure
