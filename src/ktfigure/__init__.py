@@ -55,6 +55,7 @@ A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
 DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
+HOVER_PAD = 5   # pixel buffer around objects for hover/cursor detection
 
 # Unit conversion: multiply px value by these to get the given unit
 # (or divide px by these to convert FROM the unit)
@@ -2507,16 +2508,16 @@ class KTFigure:
             self._btn_snap._lbl.configure(fg=TC["btn_fg"])
             self._set_status("Snap to grid OFF.")
 
-    def _block_at(self, bx, by):
+    def _block_at(self, bx, by, pad=0):
         for b in reversed(self._blocks):
-            if b.x1 <= bx <= b.x2 and b.y1 <= by <= b.y2:
+            if b.x1 - pad <= bx <= b.x2 + pad and b.y1 - pad <= by <= b.y2 + pad:
                 return b
         return None
 
-    def _shape_at(self, bx, by):
+    def _shape_at(self, bx, by, pad=0):
         """Find shape at given board coordinates."""
         for s in reversed(self._shapes):
-            if s.x1 <= bx <= s.x2 and s.y1 <= by <= s.y2:
+            if s.x1 - pad <= bx <= s.x2 + pad and s.y1 - pad <= by <= s.y2 + pad:
                 return s
         return None
 
@@ -4456,7 +4457,7 @@ class KTFigure:
         cy = self._cv.canvasy(event.y)
 
         # Check if hovering over a resize handle
-        for item in self._cv.find_overlapping(cx - 6, cy - 6, cx + 6, cy + 6):
+        for item in self._cv.find_overlapping(cx - 2, cy - 2, cx + 2, cy + 2):
             tags = self._cv.gettags(item)
             if "resize_handle" in tags:
                 for tag in tags:
@@ -4475,7 +4476,7 @@ class KTFigure:
 
         # Check if hovering over a block or shape (for moving)
         bx, by = self._ev_board(event)
-        if self._block_at(bx, by) or self._shape_at(bx, by):
+        if self._block_at(bx, by, pad=HOVER_PAD) or self._shape_at(bx, by, pad=HOVER_PAD):
             self._cv.configure(cursor="fleur")  # move cursor
         else:
             self._cv.configure(cursor="arrow")

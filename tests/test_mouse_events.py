@@ -9,7 +9,7 @@ import tkinter as tk
 from unittest.mock import patch, MagicMock
 
 from ktfigure import (
-    A4_W, A4_H, BOARD_PAD, DPI, GRID_SIZE,
+    A4_W, A4_H, BOARD_PAD, DPI, GRID_SIZE, HOVER_PAD,
     KTFigure, PlotBlock, Shape, TextObject,
     PlotConfigDialog, AestheticsPanel,
     default_aesthetics,
@@ -948,3 +948,71 @@ class TestAutoThemeCheck:
         """Without override, auto check sets theme by time of day."""
         self.app._theme_manual_override = False
         self.app._auto_theme_check()  # should not crash
+
+
+# ---------------------------------------------------------------------------
+# Hover tolerance (_block_at / _shape_at pad parameter)
+# ---------------------------------------------------------------------------
+
+class TestHoverTolerance:
+    """Verify that _block_at and _shape_at respect the pad parameter so the
+    cursor stays as 'fleur' (move) when the pointer is slightly outside an
+    object (up to HOVER_PAD pixels)."""
+
+    def setup_method(self):
+        self.root, self.app = make_app()
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_block_at_exact_hit(self):
+        b = PlotBlock(100, 100, 300, 300)
+        self.app._blocks.append(b)
+        assert self.app._block_at(200, 200) is b
+
+    def test_block_at_exact_miss(self):
+        b = PlotBlock(100, 100, 300, 300)
+        self.app._blocks.append(b)
+        assert self.app._block_at(50, 50) is None
+
+    def test_block_at_with_pad_catches_just_outside(self):
+        """Points just outside the block boundary but within pad are found."""
+        b = PlotBlock(100, 100, 300, 300)
+        self.app._blocks.append(b)
+        # 1 px outside each edge – found with pad=HOVER_PAD, not found with pad=0
+        assert self.app._block_at(99, 200, pad=HOVER_PAD) is b
+        assert self.app._block_at(301, 200, pad=HOVER_PAD) is b
+        assert self.app._block_at(200, 99, pad=HOVER_PAD) is b
+        assert self.app._block_at(200, 301, pad=HOVER_PAD) is b
+
+    def test_block_at_no_pad_misses_just_outside(self):
+        """Without a pad, points 1 px outside the boundary are not found."""
+        b = PlotBlock(100, 100, 300, 300)
+        self.app._blocks.append(b)
+        assert self.app._block_at(99, 200) is None
+        assert self.app._block_at(301, 200) is None
+
+    def test_shape_at_with_pad_catches_just_outside(self):
+        """Points just outside a shape boundary are found with pad=HOVER_PAD."""
+        s = Shape("rect", 200, 200, 400, 400)
+        self.app._shapes.append(s)
+        assert self.app._shape_at(199, 300, pad=HOVER_PAD) is s
+        assert self.app._shape_at(401, 300, pad=HOVER_PAD) is s
+
+    def test_shape_at_no_pad_misses_just_outside(self):
+        """Without a pad, points 1 px outside the boundary are not found."""
+        s = Shape("rect", 200, 200, 400, 400)
+        self.app._shapes.append(s)
+        assert self.app._shape_at(199, 300) is None
+        assert self.app._shape_at(401, 300) is None
+
+    def test_block_at_far_outside_pad_still_misses(self):
+        """Points further than HOVER_PAD outside are still not found."""
+        b = PlotBlock(100, 100, 300, 300)
+        self.app._blocks.append(b)
+        far = HOVER_PAD + 5
+        assert self.app._block_at(100 - far, 200, pad=HOVER_PAD) is None
+        assert self.app._block_at(300 + far, 200, pad=HOVER_PAD) is None
