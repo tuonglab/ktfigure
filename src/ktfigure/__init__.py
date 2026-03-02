@@ -2475,8 +2475,8 @@ class KTFigure:
                 ox, oy + y, ox + A4_W, oy + y,
                 fill="#cccccc", dash=(1, GRID_SIZE - 1), tags="grid",
             )
-        # Push grid behind all other items
-        self._cv.tag_lower("grid", "artboard")
+        # Place grid above the artboard (white sheet) but below blocks/shapes
+        self._cv.tag_raise("grid", "artboard")
 
     def _clear_grid(self):
         """Remove all grid lines from the canvas."""
