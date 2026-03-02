@@ -726,7 +726,7 @@ class TestAlignmentFunctions:
 
     def test_guide_cleared_on_deselect(self):
         """Clicking empty canvas must clear the guide object and its orange indicator."""
-        # Simulate double-click guide assignment
+        # Set up guide object and visual indicator directly
         self.app._guide_object = self.b1
         if self.b1.rect_id:
             self.app._cv.itemconfig(
@@ -748,6 +748,57 @@ class TestAlignmentFunctions:
         if self.b1.rect_id:
             outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
             assert outline == ""
+
+    def test_second_click_on_selected_promotes_to_guide(self):
+        """A second single-click on an already-selected object sets it as guide."""
+        # b1 is already selected (sole object), b2 not selected
+        self.app._selected_objects = [self.b1]
+        self.app._guide_object = None
+
+        # Second single-click on b1: already_selected is True → _set_guide called
+        already_selected = self.b1 in self.app._selected_objects
+        assert already_selected  # sanity check
+        if already_selected and self.b1 is not self.app._guide_object:
+            self.app._set_guide(self.b1)
+
+        assert self.app._guide_object is self.b1
+        # Orange outline must now be present
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline.upper() == "#FF6D00"
+
+    def test_double_click_on_guide_toggles_off(self):
+        """Double-clicking the current guide clears it (back to handles-only)."""
+        # Set b1 as the current guide
+        self.app._set_guide(self.b1)
+        assert self.app._guide_object is self.b1
+
+        # Simulate the toggle-off branch of _mouse_dbl
+        self.app._clear_guide_visual(self.b1)
+        self.app._guide_object = None
+
+        assert self.app._guide_object is None
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline == ""
+
+    def test_set_guide_switches_from_one_to_another(self):
+        """_set_guide clears the old guide's visual before applying the new one."""
+        self.app._set_guide(self.b1)
+        assert self.app._guide_object is self.b1
+
+        # Now set b2 as guide
+        self.app._set_guide(self.b2)
+        assert self.app._guide_object is self.b2
+
+        # b1 must no longer have the orange outline
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline == ""
+        # b2 must have the orange outline
+        if self.b2.rect_id:
+            outline = self.app._cv.itemcget(self.b2.rect_id, "outline")
+            assert outline.upper() == "#FF6D00"
 
 # ---------------------------------------------------------------------------
 # KTFigure — theme toggle

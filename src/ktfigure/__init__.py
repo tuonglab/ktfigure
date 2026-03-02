@@ -3544,6 +3544,21 @@ class KTFigure:
                         obj in self._selected_objects
                         and len(self._selected_objects) > 1
                     ):
+                        # Promote to guide if this object is not already the guide
+                        if obj is not self._guide_object:
+                            self._set_guide(obj)
+                            if block:
+                                self._set_status(
+                                    f"Plot {block.bid} set as alignment guide."
+                                )
+                            elif shape:
+                                self._set_status(
+                                    f"Shape {shape.sid} set as alignment guide."
+                                )
+                            elif text:
+                                self._set_status(
+                                    f"Text {text.tid} set as alignment guide."
+                                )
                         # Dragging multiple objects - store initial positions
                         self._multi_drag_start = (bx, by)
                         self._multi_drag_initial = {
@@ -3557,6 +3572,9 @@ class KTFigure:
                         elif text:
                             self._drag_text = text
                     else:
+                        # Check if object is already the sole selected one before
+                        # clearing selection, so we can promote it to guide
+                        already_selected = obj in self._selected_objects
                         # Select single object - unhighlight previous multi-selection
                         for prev_obj in self._selected_objects:
                             if isinstance(prev_obj, PlotBlock):
@@ -3578,6 +3596,21 @@ class KTFigure:
                             self._drag_text = text
                             self._drag_offset = (bx - text.x1, by - text.y1)
                             self._select_text(text)
+                        # Second click on already-selected object → promote to guide
+                        if already_selected and obj is not self._guide_object:
+                            self._set_guide(obj)
+                            if block:
+                                self._set_status(
+                                    f"Plot {block.bid} set as alignment guide."
+                                )
+                            elif shape:
+                                self._set_status(
+                                    f"Shape {shape.sid} set as alignment guide."
+                                )
+                            elif text:
+                                self._set_status(
+                                    f"Text {text.tid} set as alignment guide."
+                                )
             else:
                 # Clicking on empty space: start drag-to-select
                 if not self._is_cmd_pressed(event):
@@ -4391,41 +4424,24 @@ class KTFigure:
 
         if hit_block:
             if self._mode == "select":
-                # Clear previous guide visual
-                if self._guide_object is not None and self._guide_object is not hit_block:
-                    self._clear_guide_visual(self._guide_object)
-                self._guide_object = hit_block
-                # Apply orange outline to mark as guide
-                if hit_block.rect_id:
-                    self._cv.itemconfig(
-                        hit_block.rect_id, outline="#FF6D00", width=3, dash=()
-                    )
-                self._set_status(f"Plot {hit_block.bid} set as alignment guide.")
+                if hit_block is self._guide_object:
+                    # Toggle off: demote back to just selected (handles only)
+                    self._clear_guide_visual(hit_block)
+                    self._guide_object = None
+                    self._set_status(f"Plot {hit_block.bid} guide cleared.")
+                else:
+                    self._set_guide(hit_block)
+                    self._set_status(f"Plot {hit_block.bid} set as alignment guide.")
             else:
                 self._open_config(hit_block, is_edit=True)
         elif hit_shape:
-            # Clear previous guide visual
-            if self._guide_object is not None and self._guide_object is not hit_shape:
-                self._clear_guide_visual(self._guide_object)
-            self._guide_object = hit_shape
-            # Apply guide visual
-            if hit_shape.item_id:
-                try:
-                    if hit_shape.shape_type == "line":
-                        self._cv.itemconfig(
-                            hit_shape.item_id,
-                            width=hit_shape.line_width + 2,
-                            fill="#FF6D00",
-                        )
-                    else:
-                        self._cv.itemconfig(
-                            hit_shape.item_id,
-                            width=hit_shape.line_width + 2,
-                            outline="#FF6D00",
-                        )
-                except tk.TclError:
-                    pass
-            self._set_status(f"Shape {hit_shape.sid} set as alignment guide.")
+            if hit_shape is self._guide_object:
+                self._clear_guide_visual(hit_shape)
+                self._guide_object = None
+                self._set_status(f"Shape {hit_shape.sid} guide cleared.")
+            else:
+                self._set_guide(hit_shape)
+                self._set_status(f"Shape {hit_shape.sid} set as alignment guide.")
         elif hit_text:
             # Open text editing dialog
             self._edit_text(hit_text)
@@ -4562,6 +4578,34 @@ class KTFigure:
             if obj.item_id:
                 try:
                     self._cv.itemconfig(obj.item_id, fill=obj.color)
+                except tk.TclError:
+                    pass
+
+    def _set_guide(self, obj):
+        """Set obj as the alignment guide and apply the orange visual indicator."""
+        if self._guide_object is not None and self._guide_object is not obj:
+            self._clear_guide_visual(self._guide_object)
+        self._guide_object = obj
+        if isinstance(obj, PlotBlock):
+            if obj.rect_id:
+                self._cv.itemconfig(obj.rect_id, outline="#FF6D00", width=3, dash=())
+        elif isinstance(obj, Shape):
+            if obj.item_id:
+                try:
+                    if obj.shape_type == "line":
+                        self._cv.itemconfig(
+                            obj.item_id, width=obj.line_width + 2, fill="#FF6D00"
+                        )
+                    else:
+                        self._cv.itemconfig(
+                            obj.item_id, width=obj.line_width + 2, outline="#FF6D00"
+                        )
+                except tk.TclError:
+                    pass
+        elif isinstance(obj, TextObject):
+            if obj.item_id:
+                try:
+                    self._cv.itemconfig(obj.item_id, fill="#FF6D00")
                 except tk.TclError:
                     pass
 
