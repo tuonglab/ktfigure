@@ -2287,8 +2287,8 @@ class KTFigure:
         tbtn(tb3, "➡  Align R", self._align_right)
         tbtn(tb3, "⬆  Align T", self._align_top)
         tbtn(tb3, "⬇  Align B", self._align_bottom)
-        tbtn(tb3, "⊟  Centre", self._align_center)
-        tbtn(tb3, "⊞  Middle", self._align_middle)
+        tbtn(tb3, "⊟  Align H", self._align_center)
+        tbtn(tb3, "⊞  Align V", self._align_middle)
         tbtn(tb3, "↔  Distribute H", self._distribute_horizontal)
         tbtn(tb3, "↕  Distribute V", self._distribute_vertical)
         sep(tb3)
@@ -3288,7 +3288,7 @@ class KTFigure:
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
-        self._set_status("Aligned centre.")
+        self._set_status("Aligned H.")
 
     def _align_middle(self):
         """Align y-centres of all selected objects (horizontal axis), keeping x."""
@@ -3310,7 +3310,7 @@ class KTFigure:
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
-        self._set_status("Aligned middle.")
+        self._set_status("Aligned V.")
 
     def _distribute_horizontal(self):
         """Evenly space selected objects horizontally; outermost objects stay fixed."""

@@ -800,6 +800,48 @@ class TestAlignmentFunctions:
             outline = self.app._cv.itemcget(self.b2.rect_id, "outline")
             assert outline.upper() == "#FF6D00"
 
+    def test_mouse_dbl_toggles_guide_off(self):
+        """_mouse_dbl called on the current guide block removes it as guide."""
+        # Put b1 in selection and make it the guide
+        self.app._selected_objects = [self.b1]
+        self.app._set_guide(self.b1)
+        assert self.app._guide_object is self.b1
+
+        # Build a fake event whose canvas coords land inside b1
+        # b1 is at board (0,0,100,100); centre at board (50,50)
+        # canvas coords = board + BOARD_PAD = (110, 110)
+        class FakeEvent:
+            x = BOARD_PAD + 50
+            y = BOARD_PAD + 50
+            state = 0
+
+        self.app._mouse_dbl(FakeEvent())
+        pump(self.root)
+
+        # Guide must be cleared
+        assert self.app._guide_object is None
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline == ""
+
+    def test_mouse_dbl_sets_guide_on_unguided_block(self):
+        """_mouse_dbl on a non-guide block promotes it to guide."""
+        self.app._selected_objects = [self.b1, self.b2]
+        self.app._guide_object = None
+
+        class FakeEvent:
+            x = BOARD_PAD + 50   # centre of b1 (0..100)
+            y = BOARD_PAD + 50
+            state = 0
+
+        self.app._mouse_dbl(FakeEvent())
+        pump(self.root)
+
+        assert self.app._guide_object is self.b1
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline.upper() == "#FF6D00"
+
 # ---------------------------------------------------------------------------
 # KTFigure — theme toggle
 # ---------------------------------------------------------------------------
