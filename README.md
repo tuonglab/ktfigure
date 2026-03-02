@@ -6,6 +6,12 @@
 <h1 align="center">ktfigure</h1>
 
 <p align="center">
+  <a href="https://github.com/tuonglab/ktfigure/actions/workflows/ci.yml">
+    <img src="https://github.com/tuonglab/ktfigure/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"/>
+  </a>
+</p>
+
+<p align="center">
   A GUI tool for researchers to create publication-quality seaborn/matplotlib plots — no coding required.
 </p>
 
