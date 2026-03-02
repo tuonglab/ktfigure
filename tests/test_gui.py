@@ -1228,3 +1228,341 @@ class TestAestheticsPanel:
             "y": [3.0, 2.0, 1.0],
             "cat": ["A", "B", "A"],
         })
+
+
+# ---------------------------------------------------------------------------
+# Coverage boost — uncovered branches in alignment, guide visual, and select
+# ---------------------------------------------------------------------------
+
+class TestCoverageBoost:
+    """Targeted tests to cover previously uncovered branches."""
+
+    def setup_method(self):
+        self.root, self.app = make_app()
+        self.b1 = PlotBlock(0, 0, 100, 100)
+        self.b2 = PlotBlock(200, 50, 300, 150)
+        for b in (self.b1, self.b2):
+            self.app._blocks.append(b)
+            self.app._draw_empty_block(b)
+        self.app._selected_objects = [self.b1, self.b2]
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Alignment guide branches for _align_right/_align_top/_align_bottom
+    # _align_center/_align_middle when guide IS in selected objects.
+    # These cover the `anchor_obj = self._guide_object` lines.
+    # ------------------------------------------------------------------
+
+    def test_align_right_with_guide(self):
+        """_align_right uses guide as anchor when guide is in selected_objects."""
+        self.app._guide_object = self.b1  # b1 is leftmost but is the guide
+        self.app._align_right()
+        # b2 must align its right edge to b1.x2
+        assert self.b2.x2 == pytest.approx(self.b1.x2)
+
+    def test_align_top_with_guide(self):
+        """_align_top uses guide as anchor when guide is in selected_objects."""
+        self.app._guide_object = self.b2  # b2.y1=50 is lower; normally b1 would be anchor
+        self.app._align_top()
+        # b1 must align its top to b2.y1 (=50)
+        assert self.b1.y1 == pytest.approx(self.b2.y1)
+
+    def test_align_bottom_with_guide(self):
+        """_align_bottom uses guide as anchor when guide is in selected_objects."""
+        self.app._guide_object = self.b1  # b1.y2=100 is higher; normally b2 (150) would anchor
+        self.app._align_bottom()
+        # b2 must align its bottom to b1.y2 (=100)
+        assert self.b2.y2 == pytest.approx(self.b1.y2)
+
+    def test_align_center_with_guide_in_selected(self):
+        """_align_center uses guide as anchor when guide is in selected_objects."""
+        self.app._guide_object = self.b2
+        self.app._align_center()
+        anchor_cx = (self.b2.x1 + self.b2.x2) / 2
+        b1_cx = (self.b1.x1 + self.b1.x2) / 2
+        assert b1_cx == pytest.approx(anchor_cx)
+
+    def test_align_middle_with_guide_in_selected(self):
+        """_align_middle uses guide as anchor when guide is in selected_objects."""
+        self.app._guide_object = self.b2
+        self.app._align_middle()
+        anchor_cy = (self.b2.y1 + self.b2.y2) / 2
+        b1_cy = (self.b1.y1 + self.b1.y2) / 2
+        assert b1_cy == pytest.approx(anchor_cy)
+
+    def test_align_middle_fewer_than_two_objects(self):
+        """_align_middle with <2 objects sets a status message and returns."""
+        self.app._selected_objects = [self.b1]
+        self.app._align_middle()  # should not raise
+
+    def test_align_center_fewer_than_two_objects(self):
+        """_align_center with <2 objects sets a status message and returns."""
+        self.app._selected_objects = [self.b1]
+        self.app._align_center()  # should not raise
+
+    # ------------------------------------------------------------------
+    # distribute_vertical with ≥3 objects (covers lines 3344-3359)
+    # ------------------------------------------------------------------
+
+    def test_distribute_vertical_three_objects(self):
+        """distribute_vertical evenly spaces 3 objects vertically."""
+        b3 = PlotBlock(0, 300, 100, 400)
+        self.app._blocks.append(b3)
+        self.app._draw_empty_block(b3)
+        self.app._selected_objects = [self.b1, self.b2, b3]
+        self.app._distribute_vertical()
+        # b1 (y:0-100) and b3 (y:300-400) are outermost; b2 is repositioned
+        # Inner width = 100; available = 300-100 = 200; spacing = (200-100)/2 = 50
+        # b2 should start at b1.y2 + spacing = 100 + 50 = 150
+        assert self.b2.y1 == pytest.approx(150.0)
+        assert self.b2.y2 == pytest.approx(250.0)
+
+    # ------------------------------------------------------------------
+    # _set_guide and _clear_guide_visual for Shape / TextObject
+    # (covers 4564-4582, 4590->exit, 4593->exit, 4596, 4603-4610)
+    # ------------------------------------------------------------------
+
+    def test_set_guide_line_shape(self):
+        """_set_guide on a line shape applies orange fill."""
+        s = Shape(10, 10, 200, 10, "line")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._set_guide(s)
+        assert self.app._guide_object is s
+        if s.item_id:
+            fill = self.app._cv.itemcget(s.item_id, "fill")
+            assert fill.upper() == "#FF6D00"
+
+    def test_set_guide_rect_shape(self):
+        """_set_guide on a rectangle shape applies orange outline."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._set_guide(s)
+        assert self.app._guide_object is s
+        if s.item_id:
+            outline = self.app._cv.itemcget(s.item_id, "outline")
+            assert outline.upper() == "#FF6D00"
+
+    def test_set_guide_text_object(self):
+        """_set_guide on a TextObject applies orange fill."""
+        t = TextObject(50, 50, "hello")
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._set_guide(t)
+        assert self.app._guide_object is t
+        if t.item_id:
+            fill = self.app._cv.itemcget(t.item_id, "fill")
+            assert fill.upper() == "#FF6D00"
+
+    def test_clear_guide_visual_line_shape(self):
+        """_clear_guide_visual on a line shape restores original color."""
+        s = Shape(10, 10, 200, 10, "line")
+        s.color = "#000000"
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._set_guide(s)
+        self.app._clear_guide_visual(s)
+        if s.item_id:
+            fill = self.app._cv.itemcget(s.item_id, "fill")
+            assert fill.upper() == "#000000"
+
+    def test_clear_guide_visual_rect_shape(self):
+        """_clear_guide_visual on a rect shape restores original outline."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        s.color = "#0000FF"
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._set_guide(s)
+        self.app._clear_guide_visual(s)
+        if s.item_id:
+            outline = self.app._cv.itemcget(s.item_id, "outline")
+            assert outline.upper() == "#0000FF"
+
+    def test_clear_guide_visual_text_object(self):
+        """_clear_guide_visual on a TextObject restores original fill color."""
+        t = TextObject(50, 50, "hello")
+        t.color = "#222222"
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._set_guide(t)
+        self.app._clear_guide_visual(t)
+        if t.item_id:
+            fill = self.app._cv.itemcget(t.item_id, "fill")
+            assert fill.upper() == "#222222"
+
+    # ------------------------------------------------------------------
+    # _highlight_shape / _unhighlight_shape when shape is the guide
+    # (covers 2856-2866, 2872->2889, 2877, 2885-2887, 2893-2894)
+    # ------------------------------------------------------------------
+
+    def test_highlight_shape_as_guide(self):
+        """_highlight_shape applies orange outline when shape is the guide."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._guide_object = s
+        self.app._highlight_shape(s)
+        if s.item_id:
+            outline = self.app._cv.itemcget(s.item_id, "outline")
+            assert outline.upper() == "#FF6D00"
+
+    def test_highlight_shape_line_as_guide(self):
+        """_highlight_shape on a line applies orange fill when it is the guide."""
+        s = Shape(10, 10, 200, 10, "line")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._guide_object = s
+        self.app._highlight_shape(s)
+        if s.item_id:
+            fill = self.app._cv.itemcget(s.item_id, "fill")
+            assert fill.upper() == "#FF6D00"
+
+    def test_unhighlight_shape_restores_line(self):
+        """_unhighlight_shape restores line color/width."""
+        s = Shape(10, 10, 200, 10, "line")
+        s.color = "#FF0000"
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._guide_object = s
+        self.app._highlight_shape(s)
+        self.app._unhighlight_shape(s)
+        pump(self.root)
+        if s.item_id:
+            fill = self.app._cv.itemcget(s.item_id, "fill")
+            assert fill.upper() == "#FF0000"
+
+    def test_unhighlight_shape_not_in_selection(self):
+        """_unhighlight_shape clears handles when shape not in _selected_objects."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_objects = []
+        self.app._highlight_shape(s)
+        self.app._unhighlight_shape(s)  # should not raise
+
+    # ------------------------------------------------------------------
+    # _highlight_text / _unhighlight_text when text is the guide
+    # (covers 2634-2637, 2643->2649, 2646-2647, 2653-2654)
+    # ------------------------------------------------------------------
+
+    def test_highlight_text_as_guide(self):
+        """_highlight_text applies orange fill when text is the guide."""
+        t = TextObject(50, 50, "test")
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._guide_object = t
+        self.app._highlight_text(t)
+        if t.item_id:
+            fill = self.app._cv.itemcget(t.item_id, "fill")
+            assert fill.upper() == "#FF6D00"
+
+    def test_unhighlight_text_restores_color(self):
+        """_unhighlight_text restores text fill to its original color."""
+        t = TextObject(50, 50, "test")
+        t.color = "#123456"
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._guide_object = t
+        self.app._highlight_text(t)
+        self.app._selected_objects = []  # not in selection → clears handles
+        self.app._unhighlight_text(t)
+        pump(self.root)
+        if t.item_id:
+            fill = self.app._cv.itemcget(t.item_id, "fill")
+            assert fill.upper() == "#123456"
+
+    # ------------------------------------------------------------------
+    # _select_block cleanup (covers 4681-4682, 4684-4685)
+    # ------------------------------------------------------------------
+
+    def test_select_block_clears_selected_shape(self):
+        """_select_block unhighlights _selected_shape and clears it."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_shape = s
+        self.app._select_block(self.b1)
+        assert self.app._selected_shape is None
+
+    def test_select_block_clears_selected_text(self):
+        """_select_block unhighlights _selected_text and clears it."""
+        t = TextObject(50, 50, "hi")
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._selected_text = t
+        self.app._select_block(self.b1)
+        assert self.app._selected_text is None
+
+    # ------------------------------------------------------------------
+    # _delete_key for shape and text (covers 4830->4832, 4844->4846)
+    # ------------------------------------------------------------------
+
+    def test_delete_key_with_shape_selected(self):
+        """_delete_key removes the selected shape without a confirmation dialog."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_objects = []
+        self.app._selected_shape = s
+        before = len(self.app._shapes)
+        self.app._delete_key()
+        assert len(self.app._shapes) == before - 1
+        assert self.app._selected_shape is None
+
+    def test_delete_key_with_text_selected(self):
+        """_delete_key removes the selected text object without a dialog."""
+        t = TextObject(50, 50, "bye")
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._selected_objects = []
+        self.app._selected_text = t
+        before = len(self.app._texts)
+        self.app._delete_key()
+        assert len(self.app._texts) == before - 1
+        assert self.app._selected_text is None
+
+    # ------------------------------------------------------------------
+    # _mouse_dbl shape toggle-off (covers 4439-4441)
+    # ------------------------------------------------------------------
+
+    def test_mouse_dbl_toggles_shape_guide_off(self):
+        """_mouse_dbl on the current guide shape removes it as guide."""
+        # Place the shape entirely outside the setup blocks (b1:0-100,0-100; b2:200-300,50-150)
+        s = Shape(50, 200, 200, 300, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_objects = [s]
+        self.app._set_guide(s)
+        assert self.app._guide_object is s
+
+        # Click at centre of shape: board (125, 250); canvas = BOARD_PAD + 125/250
+        class FakeEvent:
+            x = BOARD_PAD + 125
+            y = BOARD_PAD + 250
+            state = 0
+
+        self.app._mouse_dbl(FakeEvent())
+        pump(self.root)
+
+        assert self.app._guide_object is None
+
+    # ------------------------------------------------------------------
+    # _redraw_selected_handles with TextObject (covers 3184->3179)
+    # ------------------------------------------------------------------
+
+    def test_redraw_selected_handles_with_text(self):
+        """_redraw_selected_handles draws handles for TextObject objects."""
+        t = TextObject(50, 50, "hi")
+        t.x2 = 150
+        t.y2 = 80
+        self.app._texts.append(t)
+        self.app._draw_text(t)
+        self.app._selected_objects = [t]
+        self.app._redraw_selected_handles()  # must not raise
+        pump(self.root)
