@@ -66,6 +66,15 @@ jobs:
               --cov-fail-under=90 \
               -v
 
+      - name: Run tests with coverage (non-Linux)
+        if: runner.os != 'Linux'
+        run: |
+          python -m pytest \
+            --cov=ktfigure \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=90 \
+            -v
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
