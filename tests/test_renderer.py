@@ -255,3 +255,7 @@ class TestPlotRendererErrorHandling:
         # Rendering with None df should show error text, not crash
         fig = PlotRenderer.render(b)
         assert_figure(fig)
+        # The axes text should contain "Render error"
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert any("Render error" in t or "error" in t.lower() for t in texts)
