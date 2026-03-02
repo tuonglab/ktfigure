@@ -54,25 +54,35 @@ jobs:
             const { owner, repo } = context.repo;
 
             // Upload a PNG to GitHub's image CDN via the issues-assets endpoint.
-            // Uses the built-in FormData + fetch (Node.js 20) so the multipart
-            // Content-Type boundary is set automatically.  Returns the public
-            // CDN URL or null on failure.
+            // We build the multipart body as a concrete Buffer so that Node.js
+            // fetch (undici) sets Content-Length automatically.  Using FormData
+            // causes undici to stream with Transfer-Encoding: chunked (no
+            // Content-Length), which GitHub's upload server rejects as "Bad Size".
             async function uploadImage(label, filePath) {
               if (!fs.existsSync(filePath)) {
                 console.warn(`Screenshot not found: ${filePath}`);
                 return null;
               }
-              const bytes = new Uint8Array(fs.readFileSync(filePath));
+              const fileBytes = fs.readFileSync(filePath); // Buffer
               const name = path.basename(filePath);
-              const form = new FormData();
-              form.append('file', new Blob([bytes], { type: 'image/png' }), name);
+              const boundary = '----FormBoundary' + Math.random().toString(36).slice(2, 10);
+              const preamble = Buffer.from(
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="file"; filename="${name}"\r\n` +
+                `Content-Type: image/png\r\n\r\n`
+              );
+              const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`);
+              const body = Buffer.concat([preamble, fileBytes, epilogue]);
               try {
                 const res = await fetch(
                   `https://uploads.github.com/repos/${owner}/${repo}/issues/assets?name=${encodeURIComponent(name)}`,
                   {
                     method: 'POST',
-                    headers: { 'Authorization': `token ${core.getInput('github-token')}` },
-                    body: form,
+                    headers: {
+                      'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                    },
+                    body, // Buffer → undici sets Content-Length automatically
                   }
                 );
                 if (!res.ok) {
