@@ -1,8 +1,8 @@
 """Capture KTFigure GUI screenshots for the automated PR comment.
 
-Opens the KTFigure application, draws a few shapes and plot blocks on the
-canvas, then takes two screenshots — one with the grid hidden and one with
-the dot-grid overlay visible.
+Opens the KTFigure application once, draws a few shapes and plot blocks,
+then takes two screenshots inside the same Tk session — one with the grid
+hidden and one with the dot-grid overlay visible.
 
 Run under xvfb-run on Linux:
     xvfb-run --auto-servernum python .github/scripts/generate_pr_screenshots.py
@@ -14,95 +14,113 @@ import os
 import subprocess
 import sys
 import time
-import tkinter as tk
 import traceback
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
-from ktfigure import KTFigure, PlotBlock, Shape  # noqa: E402
 
 OUT = os.environ.get("SCREENSHOT_DIR", "/tmp/pr_screenshots")
 os.makedirs(OUT, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Import tkinter and ktfigure
+# ---------------------------------------------------------------------------
+try:
+    import tkinter as tk
+except ImportError as exc:
+    print(f"tkinter not available: {exc}", file=sys.stderr)
+    sys.exit(1)
 
-def capture_gui(output_path: str, *, show_grid: bool = False) -> bool:
-    """Open KTFigure, populate the canvas, take a screenshot with scrot."""
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        print(f"  ⚠ No display: {exc}", file=sys.stderr)
-        return False
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+from ktfigure import KTFigure, PlotBlock, Shape  # noqa: E402
 
-    root.geometry("1280x860")
-    app = KTFigure(root)
 
-    # --- draw a couple of plot-block placeholders ---
-    for coords in [(40, 60, 420, 360), (460, 60, 840, 360)]:
-        b = PlotBlock(*coords)
-        app._blocks.append(b)
-        app._draw_empty_block(b)
-
-    # --- draw some shapes so the canvas looks interesting ---
-    shapes = [
-        (100, 420, 380, 600, "rectangle"),
-        (420, 420, 700, 600, "circle"),
-        (740, 420, 1000, 600, "line"),
-    ]
-    for x1, y1, x2, y2, stype in shapes:
-        s = Shape(x1, y1, x2, y2, stype)
-        app._shapes.append(s)
-        app._draw_shape(s)
-
-    if show_grid:
-        app._toggle_grid_visible()
-
-    # pump events so everything is painted
-    for _ in range(50):
-        root.update()
-    root.deiconify()
-    root.lift()
-    root.focus_force()
-    for _ in range(30):
-        root.update()
-    time.sleep(0.3)
-    for _ in range(10):
+def _pump(root: "tk.Tk", n: int = 30) -> None:
+    for _ in range(n):
         root.update()
 
+
+def _scrot(output_path: str) -> bool:
+    """Take a full-screen screenshot with scrot."""
     try:
         subprocess.run(
             ["scrot", "--quality", "90", output_path],
             check=True,
             capture_output=True,
         )
+        return True
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         print(f"  ⚠ scrot failed: {exc}", file=sys.stderr)
-        root.destroy()
         return False
 
-    root.destroy()
-    return True
 
-
-SCENARIOS = [
-    ("gui_grid_hidden.png", "KTFigure – snap ON, grid hidden", False),
-    ("gui_grid_visible.png", "KTFigure – snap ON, grid visible", True),
-]
-
+# ---------------------------------------------------------------------------
+# Open one Tk session and take both screenshots inside it
+# ---------------------------------------------------------------------------
 manifest = []
 failures = []
 
-for fname, label, show_grid in SCENARIOS:
-    out_path = os.path.join(OUT, fname)
+try:
+    root = tk.Tk()
+except tk.TclError as exc:
+    print(f"Could not open display: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    root.geometry("1280x860")
+    app = KTFigure(root)
+
+    # draw a couple of plot-block placeholders
+    for coords in [(40, 60, 420, 360), (460, 60, 840, 360)]:
+        b = PlotBlock(*coords)
+        app._blocks.append(b)
+        app._draw_empty_block(b)
+
+    # draw some shapes so the canvas looks interesting
+    for x1, y1, x2, y2, stype in [
+        (100, 420, 380, 600, "rectangle"),
+        (420, 420, 700, 600, "circle"),
+        (740, 420, 1000, 600, "line"),
+    ]:
+        s = Shape(x1, y1, x2, y2, stype)
+        app._shapes.append(s)
+        app._draw_shape(s)
+
+    # raise the window and paint everything
+    _pump(root, 50)
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+    _pump(root, 30)
+    time.sleep(0.3)
+    _pump(root, 10)
+
+    # ── screenshot 1: grid hidden ──────────────────────────────────────────
+    path1 = os.path.join(OUT, "gui_grid_hidden.png")
+    if _scrot(path1):
+        manifest.append({"file": "gui_grid_hidden.png", "path": path1, "label": "KTFigure – snap ON, grid hidden"})
+        print(f"  ✓ {path1}")
+    else:
+        failures.append("gui_grid_hidden.png")
+
+    # ── screenshot 2: grid visible ─────────────────────────────────────────
+    app._toggle_grid_visible()
+    _pump(root, 20)
+    time.sleep(0.2)
+    _pump(root, 10)
+
+    path2 = os.path.join(OUT, "gui_grid_visible.png")
+    if _scrot(path2):
+        manifest.append({"file": "gui_grid_visible.png", "path": path2, "label": "KTFigure – snap ON, grid visible"})
+        print(f"  ✓ {path2}")
+    else:
+        failures.append("gui_grid_visible.png")
+
+except Exception:
+    traceback.print_exc(file=sys.stderr)
+    failures.append("unexpected error")
+finally:
     try:
-        ok = capture_gui(out_path, show_grid=show_grid)
-        if ok:
-            manifest.append({"file": fname, "path": out_path, "label": label})
-            print(f"  ✓ {out_path}")
-        else:
-            failures.append(fname)
+        root.destroy()
     except Exception:
-        print(f"  ✗ {fname}:", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
-        failures.append(fname)
+        pass
 
 manifest_path = os.path.join(OUT, "manifest.json")
 with open(manifest_path, "w") as f:
