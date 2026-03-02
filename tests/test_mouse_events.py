@@ -997,14 +997,14 @@ class TestHoverTolerance:
 
     def test_shape_at_with_pad_catches_just_outside(self):
         """Points just outside a shape boundary are found with pad=HOVER_PAD."""
-        s = Shape("rect", 200, 200, 400, 400)
+        s = Shape(200, 200, 400, 400, "rect")
         self.app._shapes.append(s)
         assert self.app._shape_at(199, 300, pad=HOVER_PAD) is s
         assert self.app._shape_at(401, 300, pad=HOVER_PAD) is s
 
     def test_shape_at_no_pad_misses_just_outside(self):
         """Without a pad, points 1 px outside the boundary are not found."""
-        s = Shape("rect", 200, 200, 400, 400)
+        s = Shape(200, 200, 400, 400, "rect")
         self.app._shapes.append(s)
         assert self.app._shape_at(199, 300) is None
         assert self.app._shape_at(401, 300) is None
