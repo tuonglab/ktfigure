@@ -54,6 +54,7 @@ A4_W = 794  # A4 width  at 96 DPI  (210 mm → 8.27 in → 794 px)
 A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
 DPI = 96
+GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
 
 # Unit conversion: multiply px value by these to get the given unit
 # (or divide px by these to convert FROM the unit)
@@ -2133,6 +2134,10 @@ class KTFigure:
         self._redo_stack: list = []
         self._max_undo = 50
 
+        # Grid / snap state
+        self._snap_to_grid: bool = True   # snap is on by default
+        self._show_grid: bool = False     # grid lines hidden by default
+
         # Clipboard
         self._clipboard = None
 
@@ -2143,6 +2148,10 @@ class KTFigure:
 
         self._build_ui()
         self._mode_select()  # Set default mode to select
+        # Snap is on by default – reflect that in the button visual state
+        self._btn_snap._is_active = True
+        self._btn_snap._set_bg("#3b82f6")
+        self._btn_snap._lbl.configure(fg="white")
         self._draw_artboard()
         self._save_state()   # Initial state
         self._auto_theme_check()  # Set theme by time of day, then schedule checks
@@ -2289,6 +2298,9 @@ class KTFigure:
         tbtn(tb3, "⊟  Center", self._align_center)
         tbtn(tb3, "↔  Distribute H", self._distribute_horizontal)
         tbtn(tb3, "↕  Distribute V", self._distribute_vertical)
+        sep(tb3)
+        self._btn_grid = tbtn(tb3, "⊞  Grid", self._toggle_grid_visible)
+        self._btn_snap = tbtn(tb3, "⊡  Snap", self._toggle_snap_to_grid)
 
         # Final bottom border
         _b3 = tk.Frame(self.root, bg=TC["sep"], height=1)
@@ -2432,6 +2444,75 @@ class KTFigure:
 
     def _ev_board(self, event):
         return self._to_board(self._cv.canvasx(event.x), self._cv.canvasy(event.y))
+
+    # -----------------------------------------------------------------------
+    # Grid / snap helpers
+    # -----------------------------------------------------------------------
+    def _snap(self, v: float) -> float:
+        """Snap a single board coordinate to the nearest grid line."""
+        if not self._snap_to_grid:
+            return v
+        return round(v / GRID_SIZE) * GRID_SIZE
+
+    def _snap_pos(self, bx: float, by: float):
+        """Return (bx, by) snapped to the grid (no-op when snap is off)."""
+        return self._snap(bx), self._snap(by)
+
+    def _draw_grid(self):
+        """Draw grid lines across the artboard.
+
+        The artboard is always rendered on a white background regardless of
+        the UI theme, so a fixed light-grey colour is appropriate here.
+        """
+        ox, oy = BOARD_PAD, BOARD_PAD
+        for x in range(0, A4_W + 1, GRID_SIZE):
+            self._cv.create_line(
+                ox + x, oy, ox + x, oy + A4_H,
+                fill="#cccccc", dash=(1, GRID_SIZE - 1), tags="grid",
+            )
+        for y in range(0, A4_H + 1, GRID_SIZE):
+            self._cv.create_line(
+                ox, oy + y, ox + A4_W, oy + y,
+                fill="#cccccc", dash=(1, GRID_SIZE - 1), tags="grid",
+            )
+        # Push grid behind all other items
+        self._cv.tag_lower("grid", "artboard")
+
+    def _clear_grid(self):
+        """Remove all grid lines from the canvas."""
+        self._cv.delete("grid")
+
+    def _toggle_grid_visible(self):
+        """Toggle visibility of the grid overlay on the artboard."""
+        self._show_grid = not self._show_grid
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
+        if self._show_grid:
+            self._draw_grid()
+            self._btn_grid._is_active = True
+            self._btn_grid._set_bg("#3b82f6")
+            self._btn_grid._lbl.configure(fg="white")
+            self._set_status("Grid visible. Drag objects to snap to grid lines.")
+        else:
+            self._clear_grid()
+            self._btn_grid._is_active = False
+            self._btn_grid._set_bg(TC["btn"])
+            self._btn_grid._lbl.configure(fg=TC["btn_fg"])
+            self._set_status("Grid hidden.")
+
+    def _toggle_snap_to_grid(self):
+        """Toggle snap-to-grid behaviour when placing or resizing objects."""
+        self._snap_to_grid = not self._snap_to_grid
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
+        if self._snap_to_grid:
+            self._btn_snap._is_active = True
+            self._btn_snap._set_bg("#3b82f6")
+            self._btn_snap._lbl.configure(fg="white")
+            self._set_status("Snap to grid ON.")
+        else:
+            self._btn_snap._is_active = False
+            self._btn_snap._set_bg(TC["btn"])
+            self._btn_snap._lbl.configure(fg=TC["btn_fg"])
+            self._set_status("Snap to grid OFF.")
 
     def _block_at(self, bx, by):
         for b in reversed(self._blocks):
@@ -3066,6 +3147,14 @@ class KTFigure:
             )
         )
 
+        # Keep grid/snap buttons in sync with current toggle state
+        if not self._btn_grid._is_active:
+            self._btn_grid._set_bg(TC["btn"])
+            self._btn_grid._lbl.configure(fg=TC["btn_fg"])
+        if not self._btn_snap._is_active:
+            self._btn_snap._set_bg(TC["btn"])
+            self._btn_snap._lbl.configure(fg=TC["btn_fg"])
+
     def _set_status(self, msg):
         self._status.configure(text=msg)
 
@@ -3272,6 +3361,7 @@ class KTFigure:
         # Handle text mode click
         if self._mode == "add_text":
             # Check if we're in a drag (will start with small movement) or just a click
+            bx, by = self._snap_pos(bx, by)
             self._drag_start = (bx, by)
             self._text_create_start = (
                 bx,
@@ -3280,6 +3370,7 @@ class KTFigure:
             return
 
         if self._mode in ("draw", "draw_line", "draw_rect", "draw_circle"):
+            bx, by = self._snap_pos(bx, by)
             self._drag_start = (bx, by)
             cx, cy = self._to_canvas(bx, by)
             if self._mode == "draw":
@@ -3499,6 +3590,7 @@ class KTFigure:
         # Handle text mode with drag threshold
         if self._mode == "add_text" and self._drag_start:
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             sx, sy = self._drag_start
             # Check if we've moved enough to start dragging (at least 10px)
             if abs(bx - sx) > 10 or abs(by - sy) > 10:
@@ -3522,7 +3614,7 @@ class KTFigure:
                     self._cv.coords(self._rubber_rect, cx0, cy0, cx1, cy1)
             return
 
-        # Handle drag-to-select box
+        # Handle drag-to-select box (no snap — free selection)
         if (
             self._selection_rect
             and not self._drag_block
@@ -3539,6 +3631,7 @@ class KTFigure:
         # Handle text box drag (rubber rectangle)
         if self._rubber_rect and self._mode == "add_text":
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             sx, sy = self._drag_start
             cx0, cy0 = self._to_canvas(sx, sy)
             cx1, cy1 = self._to_canvas(bx, by)
@@ -3606,9 +3699,9 @@ class KTFigure:
             s = self._drag_shape
             offset_x, offset_y = self._drag_offset
 
-            # Calculate new position
-            new_x1 = bx - offset_x
-            new_y1 = by - offset_y
+            # Calculate new position (snap top-left corner to grid)
+            new_x1 = self._snap(bx - offset_x)
+            new_y1 = self._snap(by - offset_y)
             w = s.x2 - s.x1
             h = s.y2 - s.y1
 
@@ -3633,9 +3726,9 @@ class KTFigure:
             b = self._drag_block
             offset_x, offset_y = self._drag_offset
 
-            # Calculate new position
-            new_x1 = bx - offset_x
-            new_y1 = by - offset_y
+            # Calculate new position (snap top-left corner to grid)
+            new_x1 = self._snap(bx - offset_x)
+            new_y1 = self._snap(by - offset_y)
             w = b.x2 - b.x1
             h = b.y2 - b.y1
 
@@ -3667,9 +3760,9 @@ class KTFigure:
             t = self._drag_text
             offset_x, offset_y = self._drag_offset
 
-            # Calculate new position
-            new_x1 = bx - offset_x
-            new_y1 = by - offset_y
+            # Calculate new position (snap top-left corner to grid)
+            new_x1 = self._snap(bx - offset_x)
+            new_y1 = self._snap(by - offset_y)
             w = t.x2 - t.x1
             h = t.y2 - t.y1
 
@@ -3691,6 +3784,7 @@ class KTFigure:
         # Handle resizing multiple selected objects
         if self._resize_corner and self._resize_all_objects:
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             c = self._resize_corner
 
             # Use the overall group bounding box as the scale reference
@@ -3783,6 +3877,7 @@ class KTFigure:
         # Handle resizing (blocks and shapes)
         if self._resize_corner and (self._resize_block or self._resize_shape):
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             obj = self._resize_block if self._resize_block else self._resize_shape
             c = self._resize_corner
             MIN = 20 if self._resize_shape else 40
@@ -3897,6 +3992,7 @@ class KTFigure:
         # Handle resizing text objects
         if self._resize_corner and self._resize_text:
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             obj = self._resize_text
             c = self._resize_corner
             MIN = 20
@@ -3931,6 +4027,7 @@ class KTFigure:
             and self._drag_start
         ):
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             sx, sy = self._drag_start
 
             # Apply Shift constraints
@@ -3962,6 +4059,7 @@ class KTFigure:
         # Handle finishing a text box drag
         if self._mode == "add_text":
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             sx, sy = self._drag_start
 
             # Check if we have a drag rectangle (user dragged)
@@ -4177,6 +4275,7 @@ class KTFigure:
         # Handle finishing drawing a new box or shape
         if self._drag_start:
             bx, by = self._ev_board(event)
+            bx, by = self._snap_pos(bx, by)
             sx, sy = self._drag_start
             self._drag_start = None
             if self._rubber_rect:

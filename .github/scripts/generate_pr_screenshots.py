@@ -111,6 +111,103 @@ for fname, caption, block in SCREENSHOTS:
         traceback.print_exc(file=sys.stderr)
         failures.append(fname)
 
+
+# ── Tk GUI screenshots (grid / snap feature) ─────────────────────────────────
+
+def _capture_tk_gui(output_path, show_grid=True):
+    """Launch KTFigure, optionally show the grid, and capture a screenshot.
+
+    Requires a running X display (xvfb) and ``scrot`` to be installed.
+    Returns True on success, False if the display or scrot is unavailable.
+    """
+    import subprocess
+    import time
+    import tkinter as tk
+    from ktfigure import KTFigure, Shape, PlotBlock as _PlotBlock
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        print(f"  ⚠ No display available for Tk GUI screenshot: {exc}", file=sys.stderr)
+        return False
+
+    root.geometry("1280x860")
+    app = KTFigure(root)
+
+    # Add a placeholder plot block
+    b = _PlotBlock(40, 40, 380, 300)
+    app._blocks.append(b)
+    app._draw_empty_block(b)
+
+    # Add a couple of shapes so the canvas looks interesting
+    from ktfigure import Shape as _Shape
+    for args in [
+        (420, 60, 680, 220, "rectangle"),
+        (60, 340, 380, 540, "circle"),
+    ]:
+        s = _Shape(*args)
+        app._shapes.append(s)
+        app._draw_shape(s)
+
+    # Enable / disable grid according to the scenario
+    if show_grid:
+        app._toggle_grid_visible()
+
+    # Pump events so the window is fully painted
+    for _ in range(40):
+        root.update()
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+    for _ in range(30):
+        root.update()
+    time.sleep(0.4)
+    for _ in range(10):
+        root.update()
+
+    # Capture the full virtual display (= the KTFigure window on xvfb)
+    try:
+        subprocess.run(
+            ["scrot", "--quality", "90", output_path],
+            check=True, capture_output=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(f"  ⚠ scrot unavailable, skipping GUI screenshot: {exc}", file=sys.stderr)
+        root.destroy()
+        return False
+
+    root.destroy()
+    return True
+
+
+GUI_SCREENSHOTS = [
+    (
+        "gui_grid_on.png",
+        "KTFigure GUI – **grid overlay visible** + snap-to-grid ON",
+        True,
+    ),
+    (
+        "gui_grid_off.png",
+        "KTFigure GUI – grid overlay hidden, snap-to-grid ON (default state)",
+        False,
+    ),
+]
+
+for fname, caption, show_grid in GUI_SCREENSHOTS:
+    out_path = os.path.join(OUT, fname)
+    try:
+        ok = _capture_tk_gui(out_path, show_grid=show_grid)
+        if ok:
+            manifest.append({"file": fname, "path": out_path, "label": caption})
+            print(f"  ✓ {out_path}")
+        else:
+            print(f"  ⚠ {fname} skipped (no display / scrot missing)", file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        print(f"  ✗ {fname} ({caption}):", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        # GUI screenshot failures are non-blocking
+
+
 manifest_path = os.path.join(OUT, "manifest.json")
 with open(manifest_path, "w") as f:
     json.dump(manifest, f, indent=2)
@@ -120,4 +217,4 @@ if failures:
     print(f"\n{len(failures)} screenshot(s) failed to generate.", file=sys.stderr)
     sys.exit(1)
 
-print(f"\nAll {len(SCREENSHOTS)} screenshots saved to {OUT}/")
+print(f"\nAll screenshots saved to {OUT}/")

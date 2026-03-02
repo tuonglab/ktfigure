@@ -9,7 +9,7 @@ import tkinter as tk
 from unittest.mock import patch, MagicMock
 
 from ktfigure import (
-    A4_W, A4_H, BOARD_PAD, DPI,
+    A4_W, A4_H, BOARD_PAD, DPI, GRID_SIZE,
     KTFigure, PlotBlock, Shape, TextObject,
     PlotConfigDialog, AestheticsPanel,
     default_aesthetics,
@@ -87,7 +87,10 @@ class TestMouseDownDrawModes:
         self.app._mode_draw_line()
         ev = board_event(self.app, 50, 50)
         self.app._mouse_down(ev)
-        assert self.app._drag_start == (50, 50)
+        # With snap ON (default) the start is snapped to the nearest grid line
+        sx, sy = self.app._drag_start
+        assert sx % GRID_SIZE == 0
+        assert sy % GRID_SIZE == 0
         assert self.app._rubber_rect is not None
 
     def test_mouse_down_draw_rect_creates_rubber_rect(self):

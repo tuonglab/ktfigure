@@ -31,7 +31,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             xvfb python3-tk tk-dev \
             libx11-dev libxext-dev libxrender-dev \
-            libxft-dev libfontconfig1 fonts-dejavu-core
+            libxft-dev libfontconfig1 fonts-dejavu-core \
+            scrot
 
       - name: Install Python dependencies
         run: |
