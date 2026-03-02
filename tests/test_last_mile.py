@@ -592,7 +592,7 @@ class TestUndoRedo:
         pump(self.root)
 
     def test_undo_nothing_to_undo(self):
-        self.app._history = []
+        self.app._undo_stack = []
         self.app._undo()  # should not crash
 
     def test_redo_nothing_to_redo(self):
