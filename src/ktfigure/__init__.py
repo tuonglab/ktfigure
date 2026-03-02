@@ -55,6 +55,19 @@ A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
 DPI = 96
 
+# Unit conversion: multiply px value by these to get the given unit
+# (or divide px by these to convert FROM the unit)
+_UNIT_TO_PX = {
+    "px":  1.0,
+    "cm":  DPI / 2.54,
+    "mm":  DPI / 25.4,
+    "pts": DPI / 72.0,
+}
+
+# Minimum pixel sizes enforced when typing values in the size panel
+_MIN_BLOCK_SIZE_PX = 40   # plot blocks
+_MIN_OBJ_SIZE_PX   = 10   # shapes and text objects
+
 PLOT_TYPES = [
     "scatter",
     "line",
@@ -905,6 +918,12 @@ class AestheticsPanel(ttk.Frame):
         self._cb_col_x = None
         self._cb_col_y = None
         self._cb_col_hue = None
+        # size controls for plot blocks
+        self._size_unit_var = tk.StringVar(value="px")
+        self._size_w_var = tk.StringVar(value="")
+        self._size_h_var = tk.StringVar(value="")
+        self._size_lock_var = tk.BooleanVar(value=True)
+        self._size_updating = False
         self._build()
 
     # helper factories for tkinter variables
@@ -1019,6 +1038,38 @@ class AestheticsPanel(ttk.Frame):
         row("Title", lambda p: ttk.Entry(p, textvariable=self._sv("title")))
         row("X label", lambda p: ttk.Entry(p, textvariable=self._sv("xlabel")))
         row("Y label", lambda p: ttk.Entry(p, textvariable=self._sv("ylabel")))
+
+        # ---- Size ----
+        section("Size")
+        sf_unit = ttk.Frame(self._inner)
+        sf_unit.pack(fill="x", pady=2)
+        ttk.Label(sf_unit, text="Unit", width=15, anchor="w").pack(side="left")
+        ttk.Combobox(
+            sf_unit,
+            textvariable=self._size_unit_var,
+            values=["px", "cm", "mm", "pts"],
+            state="readonly",
+            width=6,
+        ).pack(side="left")
+        sf_lock = ttk.Frame(self._inner)
+        sf_lock.pack(fill="x", pady=2)
+        ttk.Checkbutton(
+            sf_lock, text="Lock aspect ratio", variable=self._size_lock_var
+        ).pack(side="left")
+        sf_w = ttk.Frame(self._inner)
+        sf_w.pack(fill="x", pady=2)
+        ttk.Label(sf_w, text="Width", width=15, anchor="w").pack(side="left")
+        self._size_w_entry = ttk.Entry(sf_w, textvariable=self._size_w_var, width=8)
+        self._size_w_entry.pack(side="left", padx=(4, 0))
+        self._size_w_entry.bind("<FocusOut>", lambda e: self._apply_block_size(True))
+        self._size_w_entry.bind("<Return>", lambda e: self._apply_block_size(True))
+        sf_h = ttk.Frame(self._inner)
+        sf_h.pack(fill="x", pady=2)
+        ttk.Label(sf_h, text="Height", width=15, anchor="w").pack(side="left")
+        self._size_h_entry = ttk.Entry(sf_h, textvariable=self._size_h_var, width=8)
+        self._size_h_entry.pack(side="left", padx=(4, 0))
+        self._size_h_entry.bind("<FocusOut>", lambda e: self._apply_block_size(False))
+        self._size_h_entry.bind("<Return>", lambda e: self._apply_block_size(False))
 
         # ---- Theme ----
         section("Theme & Palette")
@@ -1195,6 +1246,7 @@ class AestheticsPanel(ttk.Frame):
         self._col_x_var.trace_add("write", on_change)
         self._col_y_var.trace_add("write", on_change)
         self._col_hue_var.trace_add("write", on_hue_change)
+        self._size_unit_var.trace_add("write", self._update_size_display)
 
     # ---- public ---------------------------------------------------------
     def load_shape(self, shape, redraw_callback):
@@ -1320,6 +1372,9 @@ class AestheticsPanel(ttk.Frame):
                     state="readonly",
                 ),
             )
+
+        # ---- Size controls ----
+        self._add_obj_size_controls(self._obj_body, shape, redraw_callback)
 
     def clear_shape_properties(self):
         """Clear the shape/text properties panel."""
@@ -1467,6 +1522,9 @@ class AestheticsPanel(ttk.Frame):
             side="left"
         )
 
+        # ---- Size controls ----
+        self._add_obj_size_controls(self._obj_body, text_obj, redraw_callback)
+
     def load_block(self, block: PlotBlock):
         self._loading = True
         try:
@@ -1504,6 +1562,9 @@ class AestheticsPanel(ttk.Frame):
 
             # seed hue colour map from block's stored palette
             self._hue_color_map = dict(a.get("hue_palette", {}))
+
+            # populate size fields
+            self._refresh_block_size_display(block)
         finally:
             self._loading = False
 
@@ -1601,6 +1662,164 @@ class AestheticsPanel(ttk.Frame):
             self._color_val = res[1]
             self._swatch.configure(bg=self._color_val)
             self._apply()
+
+    # ---- size helpers (plot blocks) --------------------------------------
+
+    @staticmethod
+    def _fmt(v):
+        """Format a float, stripping unnecessary trailing zeros."""
+        s = f"{v:.4f}".rstrip("0").rstrip(".")
+        return s if s else "0"
+
+    def _refresh_block_size_display(self, block):
+        """Refresh width/height entries from the block's current pixel dimensions."""
+        if self._size_updating:
+            return
+        self._size_updating = True
+        try:
+            scale = _UNIT_TO_PX.get(self._size_unit_var.get(), 1.0)
+            self._size_w_var.set(self._fmt(block.width_px / scale))
+            self._size_h_var.set(self._fmt(block.height_px / scale))
+        finally:
+            self._size_updating = False
+
+    def _update_size_display(self, *_):
+        """Called when the unit combobox changes – re-display current block size."""
+        if self._loading or not self._block:
+            return
+        self._refresh_block_size_display(self._block)
+
+    def _apply_block_size(self, is_width_changed: bool):
+        """Apply a typed width or height to the current plot block."""
+        if self._size_updating or not self._block:
+            return
+        self._size_updating = True
+        try:
+            scale = _UNIT_TO_PX.get(self._size_unit_var.get(), 1.0)
+            try:
+                w_val = float(self._size_w_var.get())
+                h_val = float(self._size_h_var.get())
+            except ValueError:
+                return
+            new_w_px = max(_MIN_BLOCK_SIZE_PX, round(w_val * scale))
+            new_h_px = max(_MIN_BLOCK_SIZE_PX, round(h_val * scale))
+            if self._size_lock_var.get():
+                old_w = self._block.width_px
+                old_h = self._block.height_px
+                if old_w > 0 and old_h > 0:
+                    if is_width_changed:
+                        new_h_px = max(_MIN_BLOCK_SIZE_PX, round(new_w_px * old_h / old_w))
+                        self._size_h_var.set(self._fmt(new_h_px / scale))
+                    else:
+                        new_w_px = max(_MIN_BLOCK_SIZE_PX, round(new_h_px * old_w / old_h))
+                        self._size_w_var.set(self._fmt(new_w_px / scale))
+            self._block.x2 = self._block.x1 + new_w_px
+            self._block.y2 = self._block.y1 + new_h_px
+            self._on_update(self._block)
+        finally:
+            self._size_updating = False
+
+    # ---- size helpers (shapes & text objects) ----------------------------
+
+    def _add_obj_size_controls(self, parent, obj, redraw_callback):
+        """Append width/height/unit/lock controls to *parent* for a shape or text obj."""
+        ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(10, 2))
+        ttk.Label(
+            parent, text="SIZE", font=("", 8, "bold"), foreground="#888"
+        ).pack(anchor="w", pady=(0, 2))
+
+        size_unit_var = tk.StringVar(value="px")
+        size_lock_var = tk.BooleanVar(value=True)
+        size_w_var = tk.StringVar()
+        size_h_var = tk.StringVar()
+        updating = False
+
+        def to_unit(px):
+            return px / _UNIT_TO_PX.get(size_unit_var.get(), 1.0)
+
+        def to_px(val):
+            return val * _UNIT_TO_PX.get(size_unit_var.get(), 1.0)
+
+        def refresh_display(*_):
+            nonlocal updating
+            if updating:
+                return
+            updating = True
+            try:
+                size_w_var.set(self._fmt(to_unit(abs(obj.x2 - obj.x1))))
+                size_h_var.set(self._fmt(to_unit(abs(obj.y2 - obj.y1))))
+            finally:
+                updating = False
+
+        def apply_size(is_width_changed):
+            nonlocal updating
+            if updating:
+                return
+            updating = True
+            try:
+                try:
+                    w_val = float(size_w_var.get())
+                    h_val = float(size_h_var.get())
+                except ValueError:
+                    return
+                new_w_px = max(_MIN_OBJ_SIZE_PX, round(to_px(w_val)))
+                new_h_px = max(_MIN_OBJ_SIZE_PX, round(to_px(h_val)))
+                if size_lock_var.get():
+                    old_w = abs(obj.x2 - obj.x1)
+                    old_h = abs(obj.y2 - obj.y1)
+                    if old_w > 0 and old_h > 0:
+                        if is_width_changed:
+                            new_h_px = max(_MIN_OBJ_SIZE_PX, round(new_w_px * old_h / old_w))
+                            size_h_var.set(self._fmt(to_unit(new_h_px)))
+                        else:
+                            new_w_px = max(_MIN_OBJ_SIZE_PX, round(new_h_px * old_w / old_h))
+                            size_w_var.set(self._fmt(to_unit(new_w_px)))
+                # Keep top-left corner; change bottom-right
+                obj.x2 = obj.x1 + new_w_px
+                obj.y2 = obj.y1 + new_h_px
+                redraw_callback(obj)
+            finally:
+                updating = False
+
+        refresh_display()
+        size_unit_var.trace_add("write", refresh_display)
+
+        # Unit row
+        uf = ttk.Frame(parent)
+        uf.pack(fill="x", pady=2)
+        ttk.Label(uf, text="Unit", width=12, anchor="w").pack(side="left")
+        ttk.Combobox(
+            uf,
+            textvariable=size_unit_var,
+            values=["px", "cm", "mm", "pts"],
+            state="readonly",
+            width=6,
+        ).pack(side="left")
+
+        # Lock row
+        lf = ttk.Frame(parent)
+        lf.pack(fill="x", pady=2)
+        ttk.Checkbutton(lf, text="Lock aspect ratio", variable=size_lock_var).pack(
+            side="left"
+        )
+
+        # Width row
+        wf = ttk.Frame(parent)
+        wf.pack(fill="x", pady=2)
+        ttk.Label(wf, text="Width", width=12, anchor="w").pack(side="left")
+        we = ttk.Entry(wf, textvariable=size_w_var, width=8)
+        we.pack(side="left", padx=(4, 0))
+        we.bind("<FocusOut>", lambda e: apply_size(True))
+        we.bind("<Return>", lambda e: apply_size(True))
+
+        # Height row
+        hf = ttk.Frame(parent)
+        hf.pack(fill="x", pady=2)
+        ttk.Label(hf, text="Height", width=12, anchor="w").pack(side="left")
+        he = ttk.Entry(hf, textvariable=size_h_var, width=8)
+        he.pack(side="left", padx=(4, 0))
+        he.bind("<FocusOut>", lambda e: apply_size(False))
+        he.bind("<Return>", lambda e: apply_size(False))
 
     def _apply(self):
         if not self._block:
@@ -3922,6 +4141,8 @@ class KTFigure:
                     self._render_block(b)
                 else:
                     self._draw_handles(b)
+                # Refresh size fields in panel
+                self._aes.load_block(b)
             elif self._resize_shape:
                 s = self._resize_shape
                 self._resize_shape = None
@@ -3933,6 +4154,8 @@ class KTFigure:
                 self._save_state()
                 self._draw_shape(s)
                 self._draw_handles_shape(s)
+                # Refresh size fields in panel
+                self._aes.load_shape(s, self._draw_shape)
             elif self._resize_text:
                 t = self._resize_text
                 self._resize_text = None
@@ -3942,6 +4165,8 @@ class KTFigure:
                 self._save_state()
                 self._draw_text(t)
                 self._draw_handles_text(t)
+                # Refresh size fields in panel
+                self._aes.load_text(t, self._draw_text)
             return
 
         # Handle finishing drawing a new box or shape
@@ -4711,6 +4936,20 @@ class KTFigure:
     def _on_aes_update(self, block: PlotBlock):
         if block.df is not None:
             self._render_block(block)
+        else:
+            # Update canvas items for empty blocks (no data yet)
+            cx1, cy1 = self._to_canvas(block.x1, block.y1)
+            cx2, cy2 = self._to_canvas(block.x2, block.y2)
+            if block.rect_id:
+                self._cv.coords(block.rect_id, cx1, cy1, cx2, cy2)
+            if block.label_id:
+                self._cv.coords(
+                    block.label_id, (cx1 + cx2) / 2, (cy1 + cy2) / 2
+                )
+        # Refresh selection handles whenever the block changes size
+        if self._selected == block:
+            self._clear_handles()
+            self._draw_handles(block)
 
     # -----------------------------------------------------------------------
     # Export
