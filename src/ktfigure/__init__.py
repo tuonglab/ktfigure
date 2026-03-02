@@ -2629,8 +2629,8 @@ class KTFigure:
             self._aes.clear_shape_properties()
 
     def _highlight_text(self, text_obj: TextObject):
-        """Highlight a selected text object."""
-        if text_obj.item_id:
+        """Highlight a selected text object; orange only for the guide."""
+        if text_obj.item_id and text_obj is self._guide_object:
             try:
                 self._cv.itemconfig(text_obj.item_id, fill="#FF6D00")
             except tk.TclError:
@@ -2851,23 +2851,18 @@ class KTFigure:
             self._aes.clear_shape_properties()
 
     def _highlight_shape(self, shape: Shape):
-        """Highlight a selected shape by thickening and changing color."""
-        # Increase line width and change color to show selection
-        if shape.item_id:
+        """Highlight a selected shape with handles; orange only for the guide."""
+        if shape.item_id and shape is self._guide_object:
             try:
-                current_width = shape.line_width
                 if shape.shape_type == "line":
-                    # For lines, use fill property
                     self._cv.itemconfig(
-                        shape.item_id, width=current_width + 2, fill="#FF6D00"
+                        shape.item_id, width=shape.line_width + 2, fill="#FF6D00"
                     )
                 else:
-                    # For rectangles and circles, use outline property
                     self._cv.itemconfig(
-                        shape.item_id, width=current_width + 2, outline="#FF6D00"
+                        shape.item_id, width=shape.line_width + 2, outline="#FF6D00"
                     )
             except tk.TclError:
-                # Shape item might be in an invalid state, ignore
                 pass
         # Draw handles for all selected objects
         self._draw_handles_shape(shape, clear_first=False)
@@ -3194,15 +3189,17 @@ class KTFigure:
         if len(objs) < 2:
             self._set_status("Select at least 2 objects to align.")
             return
-        # Use first selected object as guide (or explicit guide if set)
-        guide = self._guide_object if self._guide_object else objs[0]
-        guide_x = guide.x1
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = min(objs, key=lambda o: o.x1)
+        anchor_x = anchor_obj.x1
         for obj in objs:
-            if obj == guide:
+            if obj is anchor_obj:
                 continue
             w = obj.x2 - obj.x1
-            obj.x1 = guide_x
-            obj.x2 = guide_x + w
+            obj.x1 = anchor_x
+            obj.x2 = anchor_x + w
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
@@ -3213,15 +3210,17 @@ class KTFigure:
         if len(objs) < 2:
             self._set_status("Select at least 2 objects to align.")
             return
-        # Use first selected object as guide (or explicit guide if set)
-        guide = self._guide_object if self._guide_object else objs[0]
-        guide_x = guide.x2
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = max(objs, key=lambda o: o.x2)
+        anchor_x = anchor_obj.x2
         for obj in objs:
-            if obj == guide:
+            if obj is anchor_obj:
                 continue
             w = obj.x2 - obj.x1
-            obj.x2 = guide_x
-            obj.x1 = guide_x - w
+            obj.x2 = anchor_x
+            obj.x1 = anchor_x - w
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
@@ -3232,15 +3231,17 @@ class KTFigure:
         if len(objs) < 2:
             self._set_status("Select at least 2 objects to align.")
             return
-        # Use first selected object as guide (or explicit guide if set)
-        guide = self._guide_object if self._guide_object else objs[0]
-        guide_y = guide.y1
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = min(objs, key=lambda o: o.y1)
+        anchor_y = anchor_obj.y1
         for obj in objs:
-            if obj == guide:
+            if obj is anchor_obj:
                 continue
             h = obj.y2 - obj.y1
-            obj.y1 = guide_y
-            obj.y2 = guide_y + h
+            obj.y1 = anchor_y
+            obj.y2 = anchor_y + h
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
@@ -3251,91 +3252,110 @@ class KTFigure:
         if len(objs) < 2:
             self._set_status("Select at least 2 objects to align.")
             return
-        # Use first selected object as guide (or explicit guide if set)
-        guide = self._guide_object if self._guide_object else objs[0]
-        guide_y = guide.y2
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = max(objs, key=lambda o: o.y2)
+        anchor_y = anchor_obj.y2
         for obj in objs:
-            if obj == guide:
+            if obj is anchor_obj:
                 continue
             h = obj.y2 - obj.y1
-            obj.y2 = guide_y
-            obj.y1 = guide_y - h
+            obj.y2 = anchor_y
+            obj.y1 = anchor_y - h
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
         self._set_status("Aligned bottom.")
 
     def _align_center(self):
+        """Align x-centres of all selected objects (vertical axis), keeping y."""
         objs = self._get_selected_objects()
         if len(objs) < 2:
             self._set_status("Select at least 2 objects to align.")
             return
-        # Use first selected object as guide (or explicit guide if set)
-        guide = self._guide_object if self._guide_object else objs[0]
-        guide_cx = (guide.x1 + guide.x2) / 2
-        guide_cy = (guide.y1 + guide.y2) / 2
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = objs[0]
+        anchor_cx = (anchor_obj.x1 + anchor_obj.x2) / 2
         for obj in objs:
-            if obj == guide:
+            if obj is anchor_obj:
                 continue
             w = obj.x2 - obj.x1
-            h = obj.y2 - obj.y1
-            obj.x1 = guide_cx - w / 2
-            obj.x2 = guide_cx + w / 2
-            obj.y1 = guide_cy - h / 2
-            obj.y2 = guide_cy + h / 2
+            obj.x1 = anchor_cx - w / 2
+            obj.x2 = anchor_cx + w / 2
             self._update_object(obj)
         # Redraw handles for all selected objects
         self._redraw_selected_handles()
-        self._set_status("Aligned center.")
+        self._set_status("Aligned centre.")
+
+    def _align_middle(self):
+        """Align y-centres of all selected objects (horizontal axis), keeping x."""
+        objs = self._get_selected_objects()
+        if len(objs) < 2:
+            self._set_status("Select at least 2 objects to align.")
+            return
+        if self._guide_object and self._guide_object in objs:
+            anchor_obj = self._guide_object
+        else:
+            anchor_obj = objs[0]
+        anchor_cy = (anchor_obj.y1 + anchor_obj.y2) / 2
+        for obj in objs:
+            if obj is anchor_obj:
+                continue
+            h = obj.y2 - obj.y1
+            obj.y1 = anchor_cy - h / 2
+            obj.y2 = anchor_cy + h / 2
+            self._update_object(obj)
+        # Redraw handles for all selected objects
+        self._redraw_selected_handles()
+        self._set_status("Aligned middle.")
 
     def _distribute_horizontal(self):
-        if not self._guide_object:
-            self._set_status(
-                "Double-click an object first to set it as distribution guide."
-            )
+        """Evenly space selected objects horizontally; outermost objects stay fixed."""
+        objs = self._get_selected_objects()
+        if len(objs) < 3:
+            self._set_status("Select at least 3 objects to distribute.")
             return
-        all_objs = self._get_all_objects()
-        all_objs = [o for o in all_objs if o != self._guide_object]
-        if len(all_objs) < 2:
-            self._set_status("Need at least 2 other objects to distribute.")
-            return
-        all_objs.sort(key=lambda o: o.x1)
-        guide_x1 = self._guide_object.x1
-        guide_x2 = self._guide_object.x2
-        total_width = sum(o.x2 - o.x1 for o in all_objs)
-        spacing = (guide_x2 - guide_x1 - total_width) / (len(all_objs) + 1)
-        x_pos = guide_x1 + spacing
-        for obj in all_objs:
+        objs_sorted = sorted(objs, key=lambda o: (o.x1 + o.x2) / 2)
+        leftmost = objs_sorted[0]
+        rightmost = objs_sorted[-1]
+        inner = objs_sorted[1:-1]
+        total_inner_width = sum(o.x2 - o.x1 for o in inner)
+        available = rightmost.x1 - leftmost.x2
+        spacing = (available - total_inner_width) / (len(inner) + 1)
+        x_pos = leftmost.x2 + spacing
+        for obj in inner:
             w = obj.x2 - obj.x1
             obj.x1 = x_pos
             obj.x2 = x_pos + w
             x_pos += w + spacing
             self._update_object(obj)
+        self._redraw_selected_handles()
         self._set_status("Distributed horizontally.")
 
     def _distribute_vertical(self):
-        if not self._guide_object:
-            self._set_status(
-                "Double-click an object first to set it as distribution guide."
-            )
+        """Evenly space selected objects vertically; outermost objects stay fixed."""
+        objs = self._get_selected_objects()
+        if len(objs) < 3:
+            self._set_status("Select at least 3 objects to distribute.")
             return
-        all_objs = self._get_all_objects()
-        all_objs = [o for o in all_objs if o != self._guide_object]
-        if len(all_objs) < 2:
-            self._set_status("Need at least 2 other objects to distribute.")
-            return
-        all_objs.sort(key=lambda o: o.y1)
-        guide_y1 = self._guide_object.y1
-        guide_y2 = self._guide_object.y2
-        total_height = sum(o.y2 - o.y1 for o in all_objs)
-        spacing = (guide_y2 - guide_y1 - total_height) / (len(all_objs) + 1)
-        y_pos = guide_y1 + spacing
-        for obj in all_objs:
+        objs_sorted = sorted(objs, key=lambda o: (o.y1 + o.y2) / 2)
+        topmost = objs_sorted[0]
+        bottommost = objs_sorted[-1]
+        inner = objs_sorted[1:-1]
+        total_inner_height = sum(o.y2 - o.y1 for o in inner)
+        available = bottommost.y1 - topmost.y2
+        spacing = (available - total_inner_height) / (len(inner) + 1)
+        y_pos = topmost.y2 + spacing
+        for obj in inner:
             h = obj.y2 - obj.y1
             obj.y1 = y_pos
             obj.y2 = y_pos + h
             y_pos += h + spacing
             self._update_object(obj)
+        self._redraw_selected_handles()
         self._set_status("Distributed vertically.")
 
     def _update_object(self, obj):
@@ -4367,14 +4387,40 @@ class KTFigure:
 
         if hit_block:
             if self._mode == "select":
-                # Set as guide object
+                # Clear previous guide visual
+                if self._guide_object is not None and self._guide_object is not hit_block:
+                    self._clear_guide_visual(self._guide_object)
                 self._guide_object = hit_block
+                # Apply orange outline to mark as guide
+                if hit_block.rect_id:
+                    self._cv.itemconfig(
+                        hit_block.rect_id, outline="#FF6D00", width=3, dash=()
+                    )
                 self._set_status(f"Plot {hit_block.bid} set as alignment guide.")
             else:
                 self._open_config(hit_block, is_edit=True)
         elif hit_shape:
-            # Set shape as guide object
+            # Clear previous guide visual
+            if self._guide_object is not None and self._guide_object is not hit_shape:
+                self._clear_guide_visual(self._guide_object)
             self._guide_object = hit_shape
+            # Apply guide visual
+            if hit_shape.item_id:
+                try:
+                    if hit_shape.shape_type == "line":
+                        self._cv.itemconfig(
+                            hit_shape.item_id,
+                            width=hit_shape.line_width + 2,
+                            fill="#FF6D00",
+                        )
+                    else:
+                        self._cv.itemconfig(
+                            hit_shape.item_id,
+                            width=hit_shape.line_width + 2,
+                            outline="#FF6D00",
+                        )
+                except tk.TclError:
+                    pass
             self._set_status(f"Shape {hit_shape.sid} set as alignment guide.")
         elif hit_text:
             # Open text editing dialog
@@ -4490,9 +4536,34 @@ class KTFigure:
     # -----------------------------------------------------------------------
     # Selection highlight
     # -----------------------------------------------------------------------
+    def _clear_guide_visual(self, obj):
+        """Remove the orange guide indicator from an object."""
+        if isinstance(obj, PlotBlock):
+            if obj.rect_id:
+                self._cv.itemconfig(obj.rect_id, outline="", width=0, dash=())
+        elif isinstance(obj, Shape):
+            if obj.item_id:
+                try:
+                    if obj.shape_type == "line":
+                        self._cv.itemconfig(
+                            obj.item_id, width=obj.line_width, fill=obj.color
+                        )
+                    else:
+                        self._cv.itemconfig(
+                            obj.item_id, width=obj.line_width, outline=obj.color
+                        )
+                except tk.TclError:
+                    pass
+        elif isinstance(obj, TextObject):
+            if obj.item_id:
+                try:
+                    self._cv.itemconfig(obj.item_id, fill=obj.color)
+                except tk.TclError:
+                    pass
+
     def _highlight(self, block: PlotBlock):
-        if block.rect_id:
-            # Show orange outline (thicker for visibility)
+        if block.rect_id and block is self._guide_object:
+            # Show orange outline only for the guide object
             self._cv.itemconfig(block.rect_id, outline="#FF6D00", width=3, dash=())
         # Draw handles for all selected objects
         self._draw_handles(block, clear_first=False)
@@ -4611,6 +4682,8 @@ class KTFigure:
                 if item:
                     self._cv.delete(item)
             self._blocks.remove(b)
+            if self._guide_object is b:
+                self._guide_object = None
             self._selected = None
             self._aes.clear()
             self._set_status("Block deleted.")
@@ -4627,6 +4700,8 @@ class KTFigure:
             if s.item_id:
                 self._cv.delete(s.item_id)
             self._shapes.remove(s)
+            if self._guide_object is s:
+                self._guide_object = None
             self._selected_shape = None
             self._aes.clear_shape_properties()
             self._clear_handles()
@@ -4644,6 +4719,8 @@ class KTFigure:
             if t.item_id:
                 self._cv.delete(t.item_id)
             self._texts.remove(t)
+            if self._guide_object is t:
+                self._guide_object = None
             self._selected_text = None
             self._aes.clear_shape_properties()
             self._clear_handles()
@@ -4657,6 +4734,8 @@ class KTFigure:
         # Delete multiple selected objects
         if len(self._selected_objects) > 1:
             self._save_state()
+            if self._guide_object in self._selected_objects:
+                self._guide_object = None
             for obj in self._selected_objects:
                 if isinstance(obj, PlotBlock):
                     for item in (obj.rect_id, obj.image_id, obj.label_id):

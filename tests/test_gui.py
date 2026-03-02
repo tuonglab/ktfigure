@@ -636,41 +636,91 @@ class TestAlignmentFunctions:
             pass
 
     def test_align_left(self):
+        # b1.x1=0 is leftmost, so b1 is anchor; b2 moves to x1=0
         self.app._align_left()
         assert self.b2.x1 == self.b1.x1
 
     def test_align_right(self):
+        # b2.x2=300 is rightmost, so b2 is anchor; b1 moves to x2=300
         self.app._align_right()
-        assert self.b2.x2 == self.b1.x2
+        assert self.b1.x2 == self.b2.x2
 
     def test_align_top(self):
+        # b1.y1=0 is topmost, so b1 is anchor; b2 moves to y1=0
         self.app._align_top()
         assert self.b2.y1 == self.b1.y1
 
     def test_align_bottom(self):
+        # b2.y2=150 is bottommost, so b2 is anchor; b1 moves to y2=150
         self.app._align_bottom()
-        assert self.b2.y2 == self.b1.y2
+        assert self.b1.y2 == self.b2.y2
 
     def test_align_center(self):
-        cx1 = (self.b1.x1 + self.b1.x2) / 2
-        cy1 = (self.b1.y1 + self.b1.y2) / 2
+        # Centre aligns x-centres only; y positions are unchanged
+        anchor_cx = (self.b1.x1 + self.b1.x2) / 2  # b1 is first → anchor
         self.app._align_center()
         cx2 = (self.b2.x1 + self.b2.x2) / 2
+        assert cx2 == pytest.approx(anchor_cx)
+        # y of b2 must not change
+        assert self.b2.y1 == 50
+        assert self.b2.y2 == 150
+
+    def test_align_middle(self):
+        # Middle aligns y-centres only; x positions are unchanged
+        anchor_cy = (self.b1.y1 + self.b1.y2) / 2  # b1 is first → anchor
+        self.app._align_middle()
         cy2 = (self.b2.y1 + self.b2.y2) / 2
-        assert cx2 == pytest.approx(cx1)
-        assert cy2 == pytest.approx(cy1)
+        assert cy2 == pytest.approx(anchor_cy)
+        # x of b2 must not change
+        assert self.b2.x1 == 200
+        assert self.b2.x2 == 300
 
     def test_align_needs_at_least_two(self):
         """Alignment with < 2 objects should just set a status message."""
         self.app._selected_objects = [self.b1]
         self.app._align_left()  # should not crash, just sets status
 
-    def test_distribute_horizontal_no_guide(self):
-        """Without a guide object, distribute_horizontal should show status."""
-        self.app._guide_object = None
-        self.app._distribute_horizontal()  # should not crash
+    def test_align_left_respects_guide(self):
+        """When guide is set, its x1 is used as anchor regardless of position."""
+        self.app._guide_object = self.b2  # b2 is further right
+        self.app._align_left()
+        assert self.b1.x1 == self.b2.x1  # b1 moves to b2's x1
+        assert self.b2.x1 == 200  # b2 (guide) does not move
 
-    def test_distribute_vertical_no_guide(self):
+    def test_align_right_uses_rightmost(self):
+        """Without a guide, the rightmost object is the anchor for Align R."""
+        self.app._guide_object = None
+        self.app._align_right()
+        # b2 is rightmost (x2=300), b1 should move its right edge to 300
+        assert self.b2.x2 == 300  # b2 unchanged
+        assert self.b1.x2 == 300
+
+    def test_distribute_horizontal_needs_three(self):
+        """Distribute H requires at least 3 selected objects."""
+        self.app._guide_object = None
+        self.app._distribute_horizontal()  # only 2 objects → status, no crash
+
+    def test_distribute_horizontal_three_objects(self):
+        """Distribute H evenly spaces 3 objects horizontally."""
+        b3 = PlotBlock(400, 0, 500, 100)
+        self.app._blocks.append(b3)
+        self.app._draw_empty_block(b3)
+        self.app._selected_objects = [self.b1, self.b2, b3]
+        self.app._distribute_horizontal()
+        # b1 (x1=0,x2=100) and b3 (x1=400,x2=500) stay; b2 redistributed
+        assert self.b1.x1 == 0
+        assert b3.x2 == 500
+        # b2 should be centred between b1's right and b3's left
+        gap = (b3.x1 - self.b1.x2 - (self.b2.x2 - self.b2.x1)) / 2
+        assert self.b2.x1 == pytest.approx(self.b1.x2 + gap)
+
+    def test_distribute_vertical_needs_three(self):
+        """Distribute V requires at least 3 selected objects."""
+        self.app._guide_object = None
+        self.app._distribute_vertical()  # only 2 objects → status, no crash
+
+    def test_distribute_vertical_two_objects(self):
+        """With only 2 objects, distribute_vertical shows a status and does nothing."""
         self.app._guide_object = None
         self.app._distribute_vertical()  # should not crash
 
