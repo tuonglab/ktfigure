@@ -2260,16 +2260,8 @@ class KTFigure:
         tb2.pack_propagate(False)
         _all_tbs.append(tb2)
 
-        tbtn(
-            tb2, "↶  Undo", self._undo,
-            bg="#e0f2fe", fg="#0c4a6e", hover_bg="#bae6fd", press_bg="#7dd3fc",
-            _themed=False,
-        )
-        tbtn(
-            tb2, "↷  Redo", self._redo,
-            bg="#e0f2fe", fg="#0c4a6e", hover_bg="#bae6fd", press_bg="#7dd3fc",
-            _themed=False,
-        )
+        tbtn(tb2, "↶  Undo", self._undo)
+        tbtn(tb2, "↷  Redo", self._redo)
         sep(tb2)
         tbtn(tb2, "✂  Cut", self._cut)
         tbtn(tb2, "📋  Copy", self._copy)
@@ -3147,10 +3139,19 @@ class KTFigure:
             )
         )
 
-        # Keep grid/snap buttons in sync with current toggle state
+        # Keep grid/snap buttons in sync with current toggle state.
+        # Always update internal resting/hover/press colours so that mouse
+        # leave/hover work correctly after a theme switch, regardless of
+        # whether the button is currently active (blue).
+        self._btn_grid._bg = TC["btn"]
+        self._btn_grid._hover_bg = TC["btn_hover"]
+        self._btn_grid._press_bg = TC["btn_press"]
         if not self._btn_grid._is_active:
             self._btn_grid._set_bg(TC["btn"])
             self._btn_grid._lbl.configure(fg=TC["btn_fg"])
+        self._btn_snap._bg = TC["btn"]
+        self._btn_snap._hover_bg = TC["btn_hover"]
+        self._btn_snap._press_bg = TC["btn_press"]
         if not self._btn_snap._is_active:
             self._btn_snap._set_bg(TC["btn"])
             self._btn_snap._lbl.configure(fg=TC["btn_fg"])
