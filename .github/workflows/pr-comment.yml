@@ -54,48 +54,59 @@ jobs:
             const { owner, repo } = context.repo;
 
             // Upload a PNG to GitHub's image CDN via the issues-assets endpoint.
-            // We build the multipart body as a concrete Buffer so that Node.js
-            // fetch (undici) sets Content-Length automatically.  Using FormData
-            // causes undici to stream with Transfer-Encoding: chunked (no
-            // Content-Length), which GitHub's upload server rejects as "Bad Size".
+            // We use Node.js's built-in `https` module (not `fetch`/undici) so
+            // that we can set an explicit Content-Length header.  Node.js fetch
+            // (undici) always uses Transfer-Encoding: chunked for any body,
+            // which means Content-Length is never sent — and the GitHub upload
+            // endpoint rejects the request as "Bad Size" when it's absent.
+            const https = require('https');
             async function uploadImage(label, filePath) {
               if (!fs.existsSync(filePath)) {
                 console.warn(`Screenshot not found: ${filePath}`);
                 return null;
               }
-              const fileBytes = fs.readFileSync(filePath); // Buffer
+              const fileBytes = fs.readFileSync(filePath);
               const name = path.basename(filePath);
-              const boundary = '----FormBoundary' + Math.random().toString(36).slice(2, 10);
+              const boundary = '----GitHubUpload' + Date.now().toString(16);
               const preamble = Buffer.from(
                 `--${boundary}\r\n` +
                 `Content-Disposition: form-data; name="file"; filename="${name}"\r\n` +
-                `Content-Type: image/png\r\n\r\n`
+                `Content-Type: application/octet-stream\r\n\r\n`
               );
               const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`);
               const body = Buffer.concat([preamble, fileBytes, epilogue]);
-              try {
-                const res = await fetch(
-                  `https://uploads.github.com/repos/${owner}/${repo}/issues/assets?name=${encodeURIComponent(name)}`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-                    },
-                    body, // Buffer → undici sets Content-Length automatically
-                  }
-                );
-                if (!res.ok) {
-                  const text = await res.text();
-                  console.warn(`Upload failed for ${label}: HTTP ${res.status} — ${text}`);
-                  return null;
-                }
-                const json = await res.json();
-                return json.url ?? null;
-              } catch (err) {
-                console.warn(`Upload error for ${label}: ${err.message}`);
-                return null;
-              }
+              return new Promise((resolve) => {
+                const options = {
+                  hostname: 'uploads.github.com',
+                  path: `/repos/${owner}/${repo}/issues/assets?name=${encodeURIComponent(name)}`,
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                    'Content-Length': body.length,
+                    'Accept': 'application/vnd.github.v3+json',
+                  },
+                };
+                const req = https.request(options, (res) => {
+                  let data = '';
+                  res.on('data', (chunk) => { data += chunk; });
+                  res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                      try { resolve(JSON.parse(data).url ?? null); }
+                      catch { resolve(null); }
+                    } else {
+                      console.warn(`Upload failed for ${label}: HTTP ${res.statusCode} — ${data}`);
+                      resolve(null);
+                    }
+                  });
+                });
+                req.on('error', (err) => {
+                  console.warn(`Upload error for ${label}: ${err.message}`);
+                  resolve(null);
+                });
+                req.write(body);
+                req.end();
+              });
             }
 
             // ── file-change table ─────────────────────────────────────────
