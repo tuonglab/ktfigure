@@ -93,9 +93,11 @@ class TestMouseDragBlock:
         ev = board_event(self.app, 250, 220)
         self.app._mouse_drag(ev)
         pump(self.root)
-        # Block should have moved
+        # With snap ON (default, GRID_SIZE=20):
+        #   x1 = snap(250-50) = snap(200) = 200  (200 is already a grid multiple)
+        #   y1 = snap(220-50) = snap(170) = 160  (170/20=8.5 → banker's rounds to 8 → 160)
         assert self.block.x1 == 200
-        assert self.block.y1 == 170
+        assert self.block.y1 == 160
 
     def test_drag_block_constrained_to_artboard(self):
         self.app._drag_block = self.block
@@ -133,8 +135,9 @@ class TestMouseDragShape:
         ev = board_event(self.app, 250, 220)
         self.app._mouse_drag(ev)
         pump(self.root)
+        # With snap ON: x1=snap(200)=200, y1=snap(170)=160
         assert self.shape.x1 == 200
-        assert self.shape.y1 == 170
+        assert self.shape.y1 == 160
 
     def test_drag_shape_constrained(self):
         self.app._drag_shape = self.shape
@@ -170,8 +173,11 @@ class TestMouseDragText:
         ev = board_event(self.app, 200, 200)
         self.app._mouse_drag(ev)
         pump(self.root)
-        assert self.text.x1 == 190
-        assert self.text.y1 == 190
+        # With snap ON (GRID_SIZE=20):
+        #   new_x1 = snap(200-10) = snap(190) = 200  (190/20=9.5 → banker's rounds to 10 → 200)
+        #   new_y1 = snap(200-10) = snap(190) = 200
+        assert self.text.x1 == 200
+        assert self.text.y1 == 200
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +243,10 @@ class TestMouseDragResize:
         ev = board_event(self.app, 350, 300)
         self.app._mouse_drag(ev)
         pump(self.root)
-        assert self.block.x2 == 350
+        # With snap ON (GRID_SIZE=20):
+        #   x2 = snap(350) = 360  (350/20=17.5 → banker's rounds to 18 → 360)
+        #   y2 = snap(300) = 300  (300 is already a grid multiple)
+        assert self.block.x2 == 360
         assert self.block.y2 == 300
 
     def test_resize_block_nw_corner(self):
@@ -293,8 +302,11 @@ class TestMouseDragResizeShape:
         ev = board_event(self.app, 300, 250)
         self.app._mouse_drag(ev)
         pump(self.root)
+        # With snap ON (GRID_SIZE=20):
+        #   x2 = snap(300) = 300  (300 is already a grid multiple)
+        #   y2 = snap(250) = 240  (250/20=12.5 → banker's rounds to 12 → 240)
         assert self.shape.x2 == 300
-        assert self.shape.y2 == 250
+        assert self.shape.y2 == 240
 
     def test_resize_shape_nw_corner(self):
         self.app._resize_corner = "nw"
