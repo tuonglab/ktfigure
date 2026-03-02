@@ -2037,9 +2037,14 @@ class PlotRenderer:
                     frameon=frameon,
                 )
             else:
-                legend.set_visible(True)
-                legend._set_loc(a.get("legend_loc", "best"))
-                legend.set_frame_on(frameon)
+                handles, labels = ax.get_legend_handles_labels()
+                legend.remove()
+                ax.legend(
+                    handles,
+                    labels,
+                    loc=a.get("legend_loc", "best"),
+                    frameon=frameon,
+                )
 
         if not a.get("tick_labels", True):
             ax.set_xticklabels([])
