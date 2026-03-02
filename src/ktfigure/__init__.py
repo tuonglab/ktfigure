@@ -3589,6 +3589,10 @@ class KTFigure:
                             self._unhighlight_shape(prev_obj)
                         elif isinstance(prev_obj, TextObject):
                             self._unhighlight_text(prev_obj)
+                    # Clear guide object and its orange indicator
+                    if self._guide_object is not None:
+                        self._clear_guide_visual(self._guide_object)
+                        self._guide_object = None
                     self._select_block(None)
                     self._select_shape(None)
                     self._select_text(None)

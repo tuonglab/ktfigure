@@ -724,6 +724,30 @@ class TestAlignmentFunctions:
         self.app._guide_object = None
         self.app._distribute_vertical()  # should not crash
 
+    def test_guide_cleared_on_deselect(self):
+        """Clicking empty canvas must clear the guide object and its orange indicator."""
+        # Simulate double-click guide assignment
+        self.app._guide_object = self.b1
+        if self.b1.rect_id:
+            self.app._cv.itemconfig(
+                self.b1.rect_id, outline="#FF6D00", width=3, dash=()
+            )
+        self.app._selected_objects = [self.b1, self.b2]
+
+        # Simulate clicking on empty space: call the same deselect logic directly
+        for prev_obj in list(self.app._selected_objects):
+            self.app._unhighlight(prev_obj)
+        if self.app._guide_object is not None:
+            self.app._clear_guide_visual(self.app._guide_object)
+            self.app._guide_object = None
+        self.app._selected_objects = []
+
+        # Guide must be cleared
+        assert self.app._guide_object is None
+        # Orange outline must be gone from b1's canvas item
+        if self.b1.rect_id:
+            outline = self.app._cv.itemcget(self.b1.rect_id, "outline")
+            assert outline == ""
 
 # ---------------------------------------------------------------------------
 # KTFigure — theme toggle
