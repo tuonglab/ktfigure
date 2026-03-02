@@ -94,16 +94,27 @@ SCREENSHOTS = [
     ),
 ]
 
+import json  # noqa: E402 – stdlib, placed here to keep imports together
+import traceback  # noqa: E402
+
+manifest = []
 failures = []
 for fname, caption, block in SCREENSHOTS:
+    out_path = os.path.join(OUT, fname)
     try:
         fig = PlotRenderer.render(block)
-        out_path = os.path.join(OUT, fname)
         fig.savefig(out_path, dpi=120, bbox_inches="tight")
+        manifest.append({"file": fname, "path": out_path, "label": caption})
         print(f"  ✓ {out_path}")
-    except Exception as exc:  # noqa: BLE001
-        print(f"  ✗ {fname}: {exc}", file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        print(f"  ✗ {fname} ({caption}):", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         failures.append(fname)
+
+manifest_path = os.path.join(OUT, "manifest.json")
+with open(manifest_path, "w") as f:
+    json.dump(manifest, f, indent=2)
+print(f"  ✓ manifest written to {manifest_path}")
 
 if failures:
     print(f"\n{len(failures)} screenshot(s) failed to generate.", file=sys.stderr)
