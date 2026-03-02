@@ -1,0 +1,82 @@
+name: PR Summary Comment
+
+on:
+  pull_request:
+    branches: ["main", "master"]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    name: Post PR summary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Post PR summary comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const statusLabel = { added: "✅ Added", removed: "🗑️ Removed", modified: "✏️ Modified", renamed: "🔀 Renamed" };
+
+            const rows = files.map(f => {
+              const label = statusLabel[f.status] ?? f.status;
+              const changes = `+${f.additions} / -${f.deletions}`;
+              const name = f.previous_filename ? `${f.previous_filename} → ${f.filename}` : f.filename;
+              return `| ${label} | \`${name}\` | ${changes} |`;
+            });
+
+            const totalAdd = files.reduce((s, f) => s + f.additions, 0);
+            const totalDel = files.reduce((s, f) => s + f.deletions, 0);
+
+            const body = [
+              "## 📋 PR File-Change Summary",
+              "",
+              `> **${files.length} file(s) changed** — \`+${totalAdd}\` additions, \`-${totalDel}\` deletions`,
+              "",
+              "| Status | File | Changes |",
+              "| ------ | ---- | ------- |",
+              ...rows,
+              "",
+              "_This comment is auto-generated and updated on every push._",
+            ].join("\n");
+
+            const marker = "<!-- pr-summary-comment -->";
+            const fullBody = `${marker}\n${body}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
