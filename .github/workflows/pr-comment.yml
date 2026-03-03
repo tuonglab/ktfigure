@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -45,42 +45,50 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python .github/scripts/generate_pr_screenshots.py
 
-      # uploads.github.com expects raw binary with Content-Type: image/png.
-      # Multipart form (-F) is not supported and causes upload failures.
-      - name: Upload screenshots to GitHub CDN
+      # Push screenshots to a dedicated branch so they can be embedded
+      # via stable raw.githubusercontent.com URLs — no external service needed.
+      - name: Publish screenshots to gh-screenshots branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
         run: |
-          urls_file=/tmp/pr_screenshots/urls.json
-          echo '{}' > "$urls_file"
-          while IFS= read -r item; do
-            file=$(echo "$item" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['file'])")
-            path=$(echo "$item" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['path'])")
-            response=$(curl -s \
-              -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: image/png" \
-              --data-binary "@${path}" \
-              "https://uploads.github.com/repos/${REPO}/issues/assets?name=${file}")
-            url=$(echo "$response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" 2>/dev/null || echo "")
-            if [ -n "$url" ]; then
-              echo "  ✓ $file → $url"
-              python3 -c "
-          import json, sys
-          f = '/tmp/pr_screenshots/urls.json'
-          d = json.load(open(f))
-          d['$file'] = '$url'
-          json.dump(d, open(f,'w'))
-          "
-            else
-              echo "  ✗ $file upload failed: $response"
-            fi
-          done < <(python3 -c "
-          import json
-          for item in json.load(open('/tmp/pr_screenshots/manifest.json')):
-              print(json.dumps(item))
-          ")
+          PR_NUMBER="${{ github.event.number }}"
+          DEST_DIR="pr-${PR_NUMBER}"
+          BRANCH="gh-screenshots"
+          REPO="${{ github.repository }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+
+          # Work in a separate worktree so the main checkout is undisturbed
+          git worktree add /tmp/screenshots-wt --detach
+          cd /tmp/screenshots-wt
+
+          if git ls-remote --heads origin "${BRANCH}" | grep -q "${BRANCH}"; then
+            git fetch origin "${BRANCH}"
+            git checkout -b "${BRANCH}" "origin/${BRANCH}"
+          else
+            git checkout --orphan "${BRANCH}"
+            git rm -rf . > /dev/null 2>&1 || true
+          fi
+
+          mkdir -p "${DEST_DIR}"
+          if ls /tmp/pr_screenshots/*.png 1>/dev/null 2>&1; then
+            cp /tmp/pr_screenshots/*.png "${DEST_DIR}/"
+            echo "  Screenshots written to ${DEST_DIR}/:"
+            ls -1 "${DEST_DIR}/"
+          else
+            echo "  WARNING: no PNG screenshots found in /tmp/pr_screenshots/"
+          fi
+
+          git add "${DEST_DIR}/"
+          if git diff --cached --quiet; then
+            echo "  No screenshot changes to commit."
+          else
+            git commit -m "screenshots: PR #${PR_NUMBER}"
+            git push origin "${BRANCH}" || git push --force-with-lease origin "${BRANCH}"
+            echo "  ✓ Pushed screenshots to ${BRANCH}/${DEST_DIR}/"
+          fi
 
       - name: Update PR description with screenshots
         uses: actions/github-script@v7
@@ -115,15 +123,11 @@ jobs:
 
             // ── screenshots ───────────────────────────────────────────────
             const manifestPath = '/tmp/pr_screenshots/manifest.json';
-            const urlsPath     = '/tmp/pr_screenshots/urls.json';
-            const manifest  = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : [];
-            const urlMap    = fs.existsSync(urlsPath)     ? JSON.parse(fs.readFileSync(urlsPath,     'utf8')) : {};
+            const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : [];
 
             const screenshotLines = manifest.map(s => {
-              const url = urlMap[s.file];
-              return url
-                ? `**${s.label}**\n\n![${s.file}](${url})`
-                : `**${s.label}** _(screenshot upload unavailable)_`;
+              const url = `https://raw.githubusercontent.com/${owner}/${repo}/gh-screenshots/pr-${pull_number}/${s.file}`;
+              return `**${s.label}**\n\n![${s.file}](${url})`;
             });
 
             // ── assemble appended section ─────────────────────────────────
