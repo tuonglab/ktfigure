@@ -1,8 +1,9 @@
 """Capture KTFigure GUI screenshots for the automated PR comment.
 
-Opens the KTFigure application once, draws a few shapes and plot blocks,
-then takes two screenshots inside the same Tk session — one with the grid
-hidden and one with the dot-grid overlay visible.
+Opens the KTFigure application, loads example_data.csv, renders a randomly
+chosen plot (boxplot, violinplot, or scatterplot) inside a PlotBlock, adds
+one small circle, one large circle, and one rectangle in different parts of
+the artboard, then captures everything in a single screenshot.
 
 Run under xvfb-run on Linux:
     xvfb-run --auto-servernum python .github/scripts/generate_pr_screenshots.py
@@ -11,13 +12,21 @@ Screenshots are written to SCREENSHOT_DIR (default /tmp/pr_screenshots).
 """
 import json
 import os
+import random
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 
 OUT = os.environ.get("SCREENSHOT_DIR", "/tmp/pr_screenshots")
 os.makedirs(OUT, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Locate repo root (two levels above this script)
+# ---------------------------------------------------------------------------
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+CSV_PATH = os.path.join(REPO_ROOT, "example_data.csv")
 
 # ---------------------------------------------------------------------------
 # Import tkinter and ktfigure
@@ -28,7 +37,19 @@ except ImportError as exc:
     print(f"tkinter not available: {exc}", file=sys.stderr)
     sys.exit(1)
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+try:
+    import pandas as pd
+except ImportError as exc:
+    print(f"pandas not available: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    from PIL import Image as _PILImage
+except ImportError as exc:
+    print(f"Pillow not available: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 from ktfigure import KTFigure, PlotBlock, Shape  # noqa: E402
 
 
@@ -37,22 +58,33 @@ def _pump(root: "tk.Tk", n: int = 30) -> None:
         root.update()
 
 
-def _scrot(output_path: str) -> bool:
-    """Take a full-screen screenshot with scrot."""
+def _scrot(output_path: str, root: "tk.Tk") -> bool:
+    """Take a screenshot cropped to the Tk window bounds."""
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png")
+    os.close(tmp_fd)
+    os.remove(tmp_path)  # scrot won't overwrite an existing file
     try:
         subprocess.run(
-            ["scrot", "--quality", "90", output_path],
+            ["scrot", "--quality", "90", tmp_path],
             check=True,
             capture_output=True,
         )
+        x = root.winfo_rootx()
+        y = root.winfo_rooty()
+        w = root.winfo_width()
+        h = root.winfo_height()
+        _PILImage.open(tmp_path).crop((x, y, x + w, y + h)).save(output_path)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         print(f"  ⚠ scrot failed: {exc}", file=sys.stderr)
         return False
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 # ---------------------------------------------------------------------------
-# Open one Tk session and take both screenshots inside it
+# Open one Tk session, build scene, take one screenshot
 # ---------------------------------------------------------------------------
 manifest = []
 failures = []
@@ -67,51 +99,81 @@ try:
     root.geometry("1280x860")
     app = KTFigure(root)
 
-    # draw a couple of plot-block placeholders
-    for coords in [(40, 60, 420, 360), (460, 60, 840, 360)]:
-        b = PlotBlock(*coords)
-        app._blocks.append(b)
-        app._draw_empty_block(b)
+    # ── load data ──────────────────────────────────────────────────────────
+    if not os.path.exists(CSV_PATH):
+        raise FileNotFoundError(f"example_data.csv not found at {CSV_PATH}")
+    df = pd.read_csv(CSV_PATH)
 
-    # draw some shapes so the canvas looks interesting
-    for x1, y1, x2, y2, stype in [
-        (100, 420, 380, 600, "rectangle"),
-        (420, 420, 700, 600, "circle"),
-        (740, 420, 1000, 600, "line"),
-    ]:
-        s = Shape(x1, y1, x2, y2, stype)
-        app._shapes.append(s)
-        app._draw_shape(s)
+    # ── randomly choose plot type, axes, and hue column ───────────────────
+    # box / violin use categorical x; scatter uses two numeric columns
+    _CAT_COLS = ["season", "region"]
+    _NUM_COLS = ["temperature", "sales"]
+    plot_type = random.choice(["box", "violin", "scatter"])
+    if plot_type in ("box", "violin"):
+        col_x = random.choice(_CAT_COLS)
+        col_hue = next(c for c in _CAT_COLS if c != col_x)
+        col_y = random.choice(_NUM_COLS)
+    else:  # scatter
+        col_x = random.choice(_NUM_COLS)
+        col_y = next(c for c in _NUM_COLS if c != col_x)
+        col_hue = random.choice(_CAT_COLS)
 
-    # raise the window and paint everything
+    print(f"  ℹ plot type chosen: {plot_type} (x={col_x}, y={col_y}, hue={col_hue})")
+
+    # ── PlotBlock — random position and size on the artboard ──────────────
+    pb_x = int(random.random() * 380) + 20   # 20 – 399
+    pb_y = int(random.random() * 180) + 20   # 20 – 199
+    pb_w = int(random.random() * 300) + 300  # 300 – 599
+    pb_h = int(random.random() * 200) + 250  # 250 – 449
+    block = PlotBlock(pb_x, pb_y, pb_x + pb_w, pb_y + pb_h)
+    print(f"  ℹ PlotBlock at ({pb_x}, {pb_y}) size {pb_w}×{pb_h}")
+    block.df = df
+    block.plot_type = plot_type
+    block.col_x = col_x
+    block.col_y = col_y
+    block.col_hue = col_hue
+    app._blocks.append(block)
+    app._draw_empty_block(block)   # draw placeholder first (required for rect_id)
+    _pump(root, 10)
+    app._render_block(block)       # replace with actual rendered plot
+
+    # ── shapes: random count, type, size, location, colour, and line width ──
+    _COLORS = [
+        "#e74c3c", "#2980b9", "#27ae60", "#f39c12", "#8e44ad",
+        "#16a085", "#d35400", "#2c3e50", "#c0392b", "#1abc9c",
+    ]
+    _SHAPE_TYPES = ["circle", "rectangle"]
+    n_shapes = random.randint(3, 7)
+    for _ in range(n_shapes):
+        x1 = random.randint(30, 750)
+        y1 = random.randint(30, 580)
+        w = random.randint(60, 260)
+        h = random.randint(60, 260)
+        shape = Shape(x1, y1, x1 + w, y1 + h, random.choice(_SHAPE_TYPES))
+        shape.color = random.choice(_COLORS)
+        shape.line_width = random.randint(1, 4)
+        app._shapes.append(shape)
+        app._draw_shape(shape)
+    print(f"  ℹ {n_shapes} shapes added")
+
+    # ── raise window and let everything render ─────────────────────────────
     _pump(root, 50)
     root.deiconify()
     root.lift()
     root.focus_force()
-    _pump(root, 30)
-    time.sleep(0.3)
-    _pump(root, 10)
-
-    # ── screenshot 1: grid hidden ──────────────────────────────────────────
-    path1 = os.path.join(OUT, "gui_grid_hidden.png")
-    if _scrot(path1):
-        manifest.append({"file": "gui_grid_hidden.png", "path": path1, "label": "KTFigure – snap ON, grid hidden"})
-        print(f"  ✓ {path1}")
-    else:
-        failures.append("gui_grid_hidden.png")
-
-    # ── screenshot 2: grid visible ─────────────────────────────────────────
-    app._toggle_grid_visible()
+    _pump(root, 40)
+    time.sleep(0.5)
     _pump(root, 20)
-    time.sleep(0.2)
-    _pump(root, 10)
 
-    path2 = os.path.join(OUT, "gui_grid_visible.png")
-    if _scrot(path2):
-        manifest.append({"file": "gui_grid_visible.png", "path": path2, "label": "KTFigure – snap ON, grid visible"})
-        print(f"  ✓ {path2}")
+    # ── single screenshot capturing the full scene ─────────────────────────
+    fname = "gui_screenshot.png"
+    path = os.path.join(OUT, fname)
+    label = "KTFigure GUI screenshot"
+    if _scrot(path, root):
+        manifest.append({"file": fname, "path": path, "label": label})
+        print(f"  ✓ {path}")
     else:
-        failures.append("gui_grid_visible.png")
+        failures.append(fname)
 
 except Exception:
     traceback.print_exc(file=sys.stderr)
