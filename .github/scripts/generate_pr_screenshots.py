@@ -127,24 +127,24 @@ try:
     _pump(root, 10)
     app._render_block(block)       # replace with actual rendered plot
 
-    # ── shapes: small circle (top-right), big circle (mid-right), rectangle (bottom) ──
-    small_circle = Shape(510, 30, 600, 120, "circle")   # 90×90 px
-    small_circle.color = "#e74c3c"
-    small_circle.line_width = 2
-    app._shapes.append(small_circle)
-    app._draw_shape(small_circle)
-
-    big_circle = Shape(510, 160, 720, 370, "circle")    # 210×210 px
-    big_circle.color = "#2980b9"
-    big_circle.line_width = 3
-    app._shapes.append(big_circle)
-    app._draw_shape(big_circle)
-
-    rectangle = Shape(30, 420, 430, 520, "rectangle")   # 400×100 px
-    rectangle.color = "#27ae60"
-    rectangle.line_width = 2
-    app._shapes.append(rectangle)
-    app._draw_shape(rectangle)
+    # ── shapes: random count, type, size, location, colour, and line width ──
+    _COLORS = [
+        "#e74c3c", "#2980b9", "#27ae60", "#f39c12", "#8e44ad",
+        "#16a085", "#d35400", "#2c3e50", "#c0392b", "#1abc9c",
+    ]
+    _SHAPE_TYPES = ["circle", "rectangle"]
+    n_shapes = random.randint(3, 7)
+    for _ in range(n_shapes):
+        x1 = random.randint(30, 750)
+        y1 = random.randint(30, 580)
+        w = random.randint(60, 260)
+        h = random.randint(60, 260)
+        shape = Shape(x1, y1, x1 + w, y1 + h, random.choice(_SHAPE_TYPES))
+        shape.color = random.choice(_COLORS)
+        shape.line_width = random.randint(1, 4)
+        app._shapes.append(shape)
+        app._draw_shape(shape)
+    print(f"  ℹ {n_shapes} shapes added")
 
     # ── raise window and let everything render ─────────────────────────────
     _pump(root, 50)
