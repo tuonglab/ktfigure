@@ -115,8 +115,13 @@ try:
 
     print(f"  ℹ plot type chosen: {plot_type} (x={col_x}, y={col_y}, hue={col_hue})")
 
-    # ── PlotBlock — left portion of artboard ──────────────────────────────
-    block = PlotBlock(30, 30, 470, 380)
+    # ── PlotBlock — random position and size on the artboard ──────────────
+    pb_x = int(random.random() * 380) + 20   # 20 – 400
+    pb_y = int(random.random() * 180) + 20   # 20 – 200
+    pb_w = int(random.random() * 300) + 300  # 300 – 600
+    pb_h = int(random.random() * 200) + 250  # 250 – 450
+    block = PlotBlock(pb_x, pb_y, pb_x + pb_w, pb_y + pb_h)
+    print(f"  ℹ PlotBlock at ({pb_x}, {pb_y}) size {pb_w}×{pb_h}")
     block.df = df
     block.plot_type = plot_type
     block.col_x = col_x
