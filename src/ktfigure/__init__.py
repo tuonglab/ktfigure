@@ -495,10 +495,11 @@ class PlotBlock:
 # d2: distance from tip to trailing points along line
 # d3: half-width of the arrowhead perpendicular to line
 _ARROWSHAPE_BASES = {
-    "default": (8, 10, 3),
-    "sharp":   (12, 15, 2),
-    "wide":    (8, 10, 6),
-    "flat":    (4,  6, 4),
+    "default":  (8, 10, 3),
+    "sharp":    (12, 15, 2),
+    "wide":     (8, 10, 6),
+    "flat":     (4,  6, 4),
+    "triangle": (10, 10, 5),
 }
 
 
@@ -2589,7 +2590,15 @@ class KTFigure:
     def _shape_at(self, bx, by, pad=0):
         """Find shape at given board coordinates."""
         for s in reversed(self._shapes):
-            if s.x1 - pad <= bx <= s.x2 + pad and s.y1 - pad <= by <= s.y2 + pad:
+            # Normalise coords so min <= max (lines preserve drawing direction so
+            # x1/y1 are not guaranteed to be the smaller values).
+            x_min, x_max = min(s.x1, s.x2), max(s.x1, s.x2)
+            y_min, y_max = min(s.y1, s.y2), max(s.y1, s.y2)
+            # Lines can be horizontal/vertical (zero height/width), so ensure a
+            # minimum 6-pixel hit area so they stay clickable.
+            eff_pad = max(pad, 6) if s.shape_type == "line" else pad
+            if (x_min - eff_pad <= bx <= x_max + eff_pad
+                    and y_min - eff_pad <= by <= y_max + eff_pad):
                 return s
         return None
 
@@ -2659,6 +2668,13 @@ class KTFigure:
                 dash=shape.dash,
                 tags=(f"shape{shape.sid}", "shape"),
             )
+
+        # If this shape is currently selected, refresh its selection handles so
+        # they stay in sync with the new canvas item and remain functional.
+        if shape is self._selected_shape or (
+            self._selected_objects and shape in self._selected_objects
+        ):
+            self._draw_handles_shape(shape)
 
     def _draw_text(self, text_obj: TextObject):
         """Draw or redraw a text object on the canvas."""
