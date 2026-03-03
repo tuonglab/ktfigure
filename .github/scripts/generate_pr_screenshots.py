@@ -104,22 +104,27 @@ try:
         raise FileNotFoundError(f"example_data.csv not found at {CSV_PATH}")
     df = pd.read_csv(CSV_PATH)
 
-    # ── randomly choose plot type (intentionally non-deterministic so each
-    # PR run demonstrates a different chart style) ─────────────────────────
+    # ── randomly choose plot type, axes, and hue column ───────────────────
     # box / violin use categorical x; scatter uses two numeric columns
+    _CAT_COLS = ["season", "region"]
+    _NUM_COLS = ["temperature", "sales"]
     plot_type = random.choice(["box", "violin", "scatter"])
     if plot_type in ("box", "violin"):
-        col_x, col_y, col_hue = "season", "sales", "region"
+        col_x = random.choice(_CAT_COLS)
+        col_hue = next(c for c in _CAT_COLS if c != col_x)
+        col_y = random.choice(_NUM_COLS)
     else:  # scatter
-        col_x, col_y, col_hue = "temperature", "sales", "region"
+        col_x = random.choice(_NUM_COLS)
+        col_y = next(c for c in _NUM_COLS if c != col_x)
+        col_hue = random.choice(_CAT_COLS)
 
     print(f"  ℹ plot type chosen: {plot_type} (x={col_x}, y={col_y}, hue={col_hue})")
 
     # ── PlotBlock — random position and size on the artboard ──────────────
-    pb_x = int(random.random() * 380) + 20   # 20 – 400
-    pb_y = int(random.random() * 180) + 20   # 20 – 200
-    pb_w = int(random.random() * 300) + 300  # 300 – 600
-    pb_h = int(random.random() * 200) + 250  # 250 – 450
+    pb_x = int(random.random() * 380) + 20   # 20 – 399
+    pb_y = int(random.random() * 180) + 20   # 20 – 199
+    pb_w = int(random.random() * 300) + 300  # 300 – 599
+    pb_h = int(random.random() * 200) + 250  # 250 – 449
     block = PlotBlock(pb_x, pb_y, pb_x + pb_w, pb_y + pb_h)
     print(f"  ℹ PlotBlock at ({pb_x}, {pb_y}) size {pb_w}×{pb_h}")
     block.df = df
