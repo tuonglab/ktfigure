@@ -1,8 +1,9 @@
 """Capture KTFigure GUI screenshots for the automated PR comment.
 
-Opens the KTFigure application once, draws a few shapes and plot blocks,
-then takes two screenshots inside the same Tk session — one with the grid
-hidden and one with the dot-grid overlay visible.
+Opens the KTFigure application, loads example_data.csv, renders a randomly
+chosen plot (boxplot, violinplot, or scatterplot) inside a PlotBlock, adds
+one small circle, one large circle, and one rectangle in different parts of
+the artboard, then captures everything in a single screenshot.
 
 Run under xvfb-run on Linux:
     xvfb-run --auto-servernum python .github/scripts/generate_pr_screenshots.py
@@ -11,6 +12,7 @@ Screenshots are written to SCREENSHOT_DIR (default /tmp/pr_screenshots).
 """
 import json
 import os
+import random
 import subprocess
 import sys
 import time
@@ -18,6 +20,12 @@ import traceback
 
 OUT = os.environ.get("SCREENSHOT_DIR", "/tmp/pr_screenshots")
 os.makedirs(OUT, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Locate repo root (two levels above this script)
+# ---------------------------------------------------------------------------
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+CSV_PATH = os.path.join(REPO_ROOT, "example_data.csv")
 
 # ---------------------------------------------------------------------------
 # Import tkinter and ktfigure
@@ -28,7 +36,13 @@ except ImportError as exc:
     print(f"tkinter not available: {exc}", file=sys.stderr)
     sys.exit(1)
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+try:
+    import pandas as pd
+except ImportError as exc:
+    print(f"pandas not available: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 from ktfigure import KTFigure, PlotBlock, Shape  # noqa: E402
 
 
@@ -52,7 +66,7 @@ def _scrot(output_path: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Open one Tk session and take both screenshots inside it
+# Open one Tk session, build scene, take one screenshot
 # ---------------------------------------------------------------------------
 manifest = []
 failures = []
@@ -67,51 +81,71 @@ try:
     root.geometry("1280x860")
     app = KTFigure(root)
 
-    # draw a couple of plot-block placeholders
-    for coords in [(40, 60, 420, 360), (460, 60, 840, 360)]:
-        b = PlotBlock(*coords)
-        app._blocks.append(b)
-        app._draw_empty_block(b)
+    # ── load data ──────────────────────────────────────────────────────────
+    if not os.path.exists(CSV_PATH):
+        raise FileNotFoundError(f"example_data.csv not found at {CSV_PATH}")
+    df = pd.read_csv(CSV_PATH)
 
-    # draw some shapes so the canvas looks interesting
-    for x1, y1, x2, y2, stype in [
-        (100, 420, 380, 600, "rectangle"),
-        (420, 420, 700, 600, "circle"),
-        (740, 420, 1000, 600, "line"),
-    ]:
-        s = Shape(x1, y1, x2, y2, stype)
-        app._shapes.append(s)
-        app._draw_shape(s)
+    # ── randomly choose plot type (intentionally non-deterministic so each
+    # PR run demonstrates a different chart style) ─────────────────────────
+    # box / violin use categorical x; scatter uses two numeric columns
+    plot_type = random.choice(["box", "violin", "scatter"])
+    if plot_type in ("box", "violin"):
+        col_x, col_y, col_hue = "season", "sales", "region"
+    else:  # scatter
+        col_x, col_y, col_hue = "temperature", "sales", "region"
 
-    # raise the window and paint everything
+    print(f"  ℹ plot type chosen: {plot_type} (x={col_x}, y={col_y}, hue={col_hue})")
+
+    # ── PlotBlock — left portion of artboard ──────────────────────────────
+    block = PlotBlock(30, 30, 470, 380)
+    block.df = df
+    block.plot_type = plot_type
+    block.col_x = col_x
+    block.col_y = col_y
+    block.col_hue = col_hue
+    app._blocks.append(block)
+    app._draw_empty_block(block)   # draw placeholder first (required for rect_id)
+    _pump(root, 10)
+    app._render_block(block)       # replace with actual rendered plot
+
+    # ── shapes: small circle (top-right), big circle (mid-right), rectangle (bottom) ──
+    small_circle = Shape(510, 30, 600, 120, "circle")   # 90×90 px
+    small_circle.color = "#e74c3c"
+    small_circle.line_width = 2
+    app._shapes.append(small_circle)
+    app._draw_shape(small_circle)
+
+    big_circle = Shape(510, 160, 720, 370, "circle")    # 210×210 px
+    big_circle.color = "#2980b9"
+    big_circle.line_width = 3
+    app._shapes.append(big_circle)
+    app._draw_shape(big_circle)
+
+    rectangle = Shape(30, 420, 430, 520, "rectangle")   # 400×100 px
+    rectangle.color = "#27ae60"
+    rectangle.line_width = 2
+    app._shapes.append(rectangle)
+    app._draw_shape(rectangle)
+
+    # ── raise window and let everything render ─────────────────────────────
     _pump(root, 50)
     root.deiconify()
     root.lift()
     root.focus_force()
-    _pump(root, 30)
-    time.sleep(0.3)
-    _pump(root, 10)
-
-    # ── screenshot 1: grid hidden ──────────────────────────────────────────
-    path1 = os.path.join(OUT, "gui_grid_hidden.png")
-    if _scrot(path1):
-        manifest.append({"file": "gui_grid_hidden.png", "path": path1, "label": "KTFigure – snap ON, grid hidden"})
-        print(f"  ✓ {path1}")
-    else:
-        failures.append("gui_grid_hidden.png")
-
-    # ── screenshot 2: grid visible ─────────────────────────────────────────
-    app._toggle_grid_visible()
+    _pump(root, 40)
+    time.sleep(0.5)
     _pump(root, 20)
-    time.sleep(0.2)
-    _pump(root, 10)
 
-    path2 = os.path.join(OUT, "gui_grid_visible.png")
-    if _scrot(path2):
-        manifest.append({"file": "gui_grid_visible.png", "path": path2, "label": "KTFigure – snap ON, grid visible"})
-        print(f"  ✓ {path2}")
+    # ── single screenshot capturing the full scene ─────────────────────────
+    fname = "gui_screenshot.png"
+    path = os.path.join(OUT, fname)
+    label = f"KTFigure – {plot_type}plot · small circle · large circle · rectangle"
+    if _scrot(path):
+        manifest.append({"file": fname, "path": path, "label": label})
+        print(f"  ✓ {path}")
     else:
-        failures.append("gui_grid_visible.png")
+        failures.append(fname)
 
 except Exception:
     traceback.print_exc(file=sys.stderr)
