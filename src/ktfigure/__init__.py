@@ -2697,6 +2697,13 @@ class KTFigure:
             tags=(f"text{text_obj.tid}", "text"),
         )
 
+        # If this text object is currently selected, refresh its selection handles
+        # so they stay in sync with the new canvas item and remain functional.
+        if text_obj is self._selected_text or (
+            self._selected_objects and text_obj in self._selected_objects
+        ):
+            self._draw_handles_text(text_obj)
+
     def _text_at(self, x, y):
         """Find a text object at the given board coordinates."""
         for text_obj in self._texts:

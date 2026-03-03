@@ -316,6 +316,86 @@ class TestComputeArrowshape:
         assert isinstance(result, tuple)
         assert len(result) == 3
 
+    def test_triangle_at_size10(self):
+        """Triangle style has d1 == d2 (closed triangular head, no barbs)."""
+        result = ktf._compute_arrowshape("triangle", 10)
+        assert result == (10, 10, 5)
+        assert result[0] == result[1], "triangle must have d1 == d2"
+
+    def test_triangle_in_arrowshape_bases(self):
+        assert "triangle" in ktf._ARROWSHAPE_BASES
+        d1, d2, _ = ktf._ARROWSHAPE_BASES["triangle"]
+        assert d1 == d2, "triangle entry must have d1 == d2"
+
+
+# ---------------------------------------------------------------------------
+# _shape_at hit-detection
+# ---------------------------------------------------------------------------
+
+class TestShapeAt:
+    """
+    Verify the _shape_at bounding-box logic using the same algorithm as the
+    implementation (Shape coords are public; we replicate the logic inline so
+    the test has no tkinter dependency).
+    """
+
+    @staticmethod
+    def _shape_at(shapes, bx, by, pad=0):
+        for s in reversed(shapes):
+            x_min, x_max = min(s.x1, s.x2), max(s.x1, s.x2)
+            y_min, y_max = min(s.y1, s.y2), max(s.y1, s.y2)
+            eff_pad = max(pad, 6) if s.shape_type == "line" else pad
+            if (x_min - eff_pad <= bx <= x_max + eff_pad
+                    and y_min - eff_pad <= by <= y_max + eff_pad):
+                return s
+        return None
+
+    def test_rectangle_centre_hit(self):
+        r = Shape(100, 100, 300, 300, "rectangle")
+        assert self._shape_at([r], 200, 200) is r
+
+    def test_rectangle_outside_miss(self):
+        r = Shape(100, 100, 300, 300, "rectangle")
+        assert self._shape_at([r], 50, 50) is None
+
+    def test_circle_centre_hit(self):
+        c = Shape(100, 100, 300, 300, "circle")
+        assert self._shape_at([c], 200, 200) is c
+
+    def test_line_right_to_left_hit(self):
+        """Line drawn right-to-left (x1 > x2) must still be detectable."""
+        ln = Shape(300, 100, 100, 300, "line")
+        assert self._shape_at([ln], 200, 200) is ln
+
+    def test_line_bottom_to_top_hit(self):
+        """Line drawn bottom-to-top (y1 > y2) must still be detectable."""
+        ln = Shape(100, 300, 300, 100, "line")
+        assert self._shape_at([ln], 200, 200) is ln
+
+    def test_horizontal_line_6px_pad(self):
+        """Horizontal line (zero height) is reachable within 6 px (minimum line pad)."""
+        ln = Shape(100, 200, 300, 200, "line")
+        assert self._shape_at([ln], 200, 205) is ln   # 5 px away – within pad
+        assert self._shape_at([ln], 200, 206) is ln   # exactly at pad boundary
+
+    def test_horizontal_line_beyond_pad_miss(self):
+        ln = Shape(100, 200, 300, 200, "line")
+        assert self._shape_at([ln], 200, 207) is None
+
+    def test_vertical_line_6px_pad(self):
+        """Vertical line (zero width) is reachable within 6 px (minimum line pad)."""
+        ln = Shape(100, 100, 100, 300, "line")
+        assert self._shape_at([ln], 105, 200) is ln   # 5 px away – within pad
+        assert self._shape_at([ln], 106, 200) is ln   # exactly at pad boundary
+
+    def test_rect_no_minimum_pad(self):
+        """Rectangles do NOT get the 6 px minimum pad."""
+        r = Shape(100, 100, 200, 200, "rectangle")
+        # 5 px outside with pad=0 → miss
+        assert self._shape_at([r], 205, 150) is None
+        # 5 px outside with explicit pad=6 → hit
+        assert self._shape_at([r], 205, 150, pad=6) is r
+
 
 # ---------------------------------------------------------------------------
 # TextObject
