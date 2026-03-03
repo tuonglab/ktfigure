@@ -4963,6 +4963,14 @@ class KTFigure:
 
     def _delete_key(self):
         """Delete key handler - no confirmation dialog."""
+        # If focus is inside a text-entry widget (Entry, Spinbox, Text), let
+        # the widget handle the keystroke normally instead of deleting an object.
+        focused = self.root.focus_get()
+        if focused is not None and focused.winfo_class() in (
+            "Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox"
+        ):
+            return
+
         # Delete multiple selected objects
         if len(self._selected_objects) > 1:
             self._save_state()
