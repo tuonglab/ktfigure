@@ -26,6 +26,7 @@ from ktfigure import (
     TextObject,
     default_aesthetics,
 )
+import ktfigure as ktf
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +243,8 @@ class TestShape:
         assert s.line_width == 2
         assert s.fill == ""
         assert s.arrow is None
+        assert s.arrow_size == 10
+        assert s.arrowshape_style == "default"
         assert s.dash == ()
         assert s.item_id is None
 
@@ -269,6 +272,49 @@ class TestShape:
     def test_center_y(self):
         s = Shape(0, 0, 200, 100, "rectangle")
         assert s.center_y == pytest.approx(50.0)
+
+
+# ---------------------------------------------------------------------------
+# _compute_arrowshape helper
+# ---------------------------------------------------------------------------
+
+class TestComputeArrowshape:
+    def test_default_at_size10(self):
+        result = ktf._compute_arrowshape("default", 10)
+        assert result == (8, 10, 3)
+
+    def test_sharp_at_size10(self):
+        result = ktf._compute_arrowshape("sharp", 10)
+        assert result == (12, 15, 2)
+
+    def test_wide_at_size10(self):
+        result = ktf._compute_arrowshape("wide", 10)
+        assert result == (8, 10, 6)
+
+    def test_flat_at_size10(self):
+        result = ktf._compute_arrowshape("flat", 10)
+        assert result == (4, 6, 4)
+
+    def test_scale_doubles_size(self):
+        result = ktf._compute_arrowshape("default", 20)
+        assert result == (16, 20, 6)
+
+    def test_scale_halves_size(self):
+        result = ktf._compute_arrowshape("default", 5)
+        assert result == (4, 5, 2)
+
+    def test_unknown_style_falls_back_to_default(self):
+        result = ktf._compute_arrowshape("nonexistent", 10)
+        assert result == ktf._compute_arrowshape("default", 10)
+
+    def test_minimum_value_is_1(self):
+        result = ktf._compute_arrowshape("default", 1)
+        assert all(v >= 1 for v in result)
+
+    def test_returns_tuple(self):
+        result = ktf._compute_arrowshape("default", 10)
+        assert isinstance(result, tuple)
+        assert len(result) == 3
 
 
 # ---------------------------------------------------------------------------

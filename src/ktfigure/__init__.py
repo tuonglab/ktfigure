@@ -488,6 +488,28 @@ class PlotBlock:
 
 
 # ---------------------------------------------------------------------------
+# Arrowhead helpers
+# ---------------------------------------------------------------------------
+# Base arrowshape tuples (d1, d2, d3) for each style at size=10.
+# d1: distance from tip to neck along line
+# d2: distance from tip to trailing points along line
+# d3: half-width of the arrowhead perpendicular to line
+_ARROWSHAPE_BASES = {
+    "default": (8, 10, 3),
+    "sharp":   (12, 15, 2),
+    "wide":    (8, 10, 6),
+    "flat":    (4,  6, 4),
+}
+
+
+def _compute_arrowshape(style, size):
+    """Return an arrowshape tuple scaled by *size* (default 10)."""
+    base = _ARROWSHAPE_BASES.get(style, _ARROWSHAPE_BASES["default"])
+    scale = size / 10.0
+    return tuple(max(1, round(v * scale)) for v in base)
+
+
+# ---------------------------------------------------------------------------
 # Shape classes for drawing
 # ---------------------------------------------------------------------------
 class Shape:
@@ -514,6 +536,8 @@ class Shape:
         self.line_width = 2
         self.fill = ""  # empty for no fill
         self.arrow = None  # None, 'first', 'last', 'both' for lines
+        self.arrow_size = 10  # arrowhead size (controls scale of arrowshape)
+        self.arrowshape_style = "default"  # 'default', 'sharp', 'wide', 'flat'
         self.dash = ()  # () for solid, (5, 5) for dashed
 
         # Canvas item ID
@@ -1294,8 +1318,13 @@ class AestheticsPanel(ttk.Frame):
         lw_var = tk.IntVar(value=shape.line_width)
 
         def on_lw_change(*_):
-            shape.line_width = lw_var.get()
-            redraw_callback(shape)
+            try:
+                val = lw_var.get()
+                if val:
+                    shape.line_width = val
+                    redraw_callback(shape)
+            except (tk.TclError, ValueError):
+                pass
 
         lw_var.trace_add("write", on_lw_change)
         make_row(
@@ -1371,6 +1400,44 @@ class AestheticsPanel(ttk.Frame):
                     p,
                     textvariable=arrow_var,
                     values=["None", "first", "last", "both"],
+                    state="readonly",
+                ),
+            )
+
+            # Arrowhead size
+            arrow_size_var = tk.IntVar(value=shape.arrow_size)
+
+            def on_arrow_size_change(*_):
+                try:
+                    val = arrow_size_var.get()
+                    if val:
+                        shape.arrow_size = val
+                        redraw_callback(shape)
+                except (tk.TclError, ValueError):
+                    pass
+
+            arrow_size_var.trace_add("write", on_arrow_size_change)
+            make_row(
+                self._obj_body,
+                "Arrow size",
+                lambda p: ttk.Spinbox(p, textvariable=arrow_size_var, from_=5, to=30, width=5),
+            )
+
+            # Arrowhead style
+            arrow_style_var = tk.StringVar(value=shape.arrowshape_style)
+
+            def on_arrow_style_change(*_):
+                shape.arrowshape_style = arrow_style_var.get()
+                redraw_callback(shape)
+
+            arrow_style_var.trace_add("write", on_arrow_style_change)
+            make_row(
+                self._obj_body,
+                "Arrow style",
+                lambda p: ttk.Combobox(
+                    p,
+                    textvariable=arrow_style_var,
+                    values=list(_ARROWSHAPE_BASES.keys()),
                     state="readonly",
                 ),
             )
@@ -1491,8 +1558,13 @@ class AestheticsPanel(ttk.Frame):
         size_var = tk.IntVar(value=text_obj.font_size)
 
         def on_size_change(*_):
-            text_obj.font_size = size_var.get()
-            redraw_callback(text_obj)
+            try:
+                val = size_var.get()
+                if val:
+                    text_obj.font_size = val
+                    redraw_callback(text_obj)
+            except (tk.TclError, ValueError):
+                pass
 
         size_var.trace_add("write", on_size_change)
         make_row(
@@ -2551,17 +2623,18 @@ class KTFigure:
         cx2, cy2 = self._to_canvas(shape.x2, shape.y2)
 
         if shape.shape_type == "line":
-            shape.item_id = self._cv.create_line(
-                cx1,
-                cy1,
-                cx2,
-                cy2,
+            line_kwargs = dict(
                 fill=shape.color,
                 width=shape.line_width,
                 arrow=shape.arrow or None,
                 dash=shape.dash,
                 tags=(f"shape{shape.sid}", "shape"),
             )
+            if shape.arrow:
+                line_kwargs["arrowshape"] = _compute_arrowshape(
+                    shape.arrowshape_style, shape.arrow_size
+                )
+            shape.item_id = self._cv.create_line(cx1, cy1, cx2, cy2, **line_kwargs)
         elif shape.shape_type == "rectangle":
             shape.item_id = self._cv.create_rectangle(
                 cx1,
