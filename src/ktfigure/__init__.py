@@ -25,12 +25,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import tkinter as tk
-import tkinter.font as tkFont
 
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle, Ellipse, Rectangle
-from tkinter import ttk, filedialog, messagebox, colorchooser, simpledialog
+from matplotlib.patches import Ellipse, Rectangle
+from tkinter import ttk, filedialog, messagebox, colorchooser
 
 FONTTYPE = 42
 
@@ -55,20 +54,20 @@ A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
 DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
-HOVER_PAD = 5   # pixel buffer around objects for hover/cursor detection
+HOVER_PAD = 5  # pixel buffer around objects for hover/cursor detection
 
 # Unit conversion: multiply px value by these to get the given unit
 # (or divide px by these to convert FROM the unit)
 _UNIT_TO_PX = {
-    "px":  1.0,
-    "cm":  DPI / 2.54,
-    "mm":  DPI / 25.4,
+    "px": 1.0,
+    "cm": DPI / 2.54,
+    "mm": DPI / 25.4,
     "pts": DPI / 72.0,
 }
 
 # Minimum pixel sizes enforced when typing values in the size panel
-_MIN_BLOCK_SIZE_PX = 40   # plot blocks
-_MIN_OBJ_SIZE_PX   = 10   # shapes and text objects
+_MIN_BLOCK_SIZE_PX = 40  # plot blocks
+_MIN_OBJ_SIZE_PX = 10  # shapes and text objects
 
 PLOT_TYPES = [
     "scatter",
@@ -92,28 +91,28 @@ SEABORN_STYLES = ["whitegrid", "darkgrid", "white", "dark", "ticks"]
 # Themes
 # ---------------------------------------------------------------------------
 THEME_LIGHT = {
-    "tb":         "#f8fafc",
-    "btn":        "#f1f5f9",
-    "btn_fg":     "#334155",
-    "btn_hover":  "#e2e8f0",
-    "btn_press":  "#cbd5e1",
-    "sep":        "#e2e8f0",
-    "canvas":     "#525252",
-    "accent":     "#3b82f6",
-    "status_fg":  "#334155",
-    "panel_bg":   "#ffffff",
+    "tb": "#f8fafc",
+    "btn": "#f1f5f9",
+    "btn_fg": "#334155",
+    "btn_hover": "#e2e8f0",
+    "btn_press": "#cbd5e1",
+    "sep": "#e2e8f0",
+    "canvas": "#525252",
+    "accent": "#3b82f6",
+    "status_fg": "#334155",
+    "panel_bg": "#ffffff",
 }
 THEME_DARK = {
-    "tb":         "#2d2d2d",
-    "btn":        "#3c3c3c",
-    "btn_fg":     "#cccccc",
-    "btn_hover":  "#505050",
-    "btn_press":  "#3a3a3a",
-    "sep":        "#555555",
-    "canvas":     "#3c3c3c",
-    "accent":     "#4fc3f7",
-    "status_fg":  "#cccccc",
-    "panel_bg":   "#252526",
+    "tb": "#2d2d2d",
+    "btn": "#3c3c3c",
+    "btn_fg": "#cccccc",
+    "btn_hover": "#505050",
+    "btn_press": "#3a3a3a",
+    "sep": "#555555",
+    "canvas": "#3c3c3c",
+    "accent": "#4fc3f7",
+    "status_fg": "#cccccc",
+    "panel_bg": "#252526",
 }
 SEABORN_PALETTES = [
     "deep",
@@ -244,7 +243,7 @@ class StyledButton(tk.Frame):
         super().__init__(
             parent,
             bg=bg,
-            cursor="hand2",
+            cursor="arrow",
             bd=0,
             highlightthickness=1,
             highlightbackground=bg,
@@ -265,7 +264,7 @@ class StyledButton(tk.Frame):
             font=font,
             padx=padx,
             pady=pady,
-            cursor="hand2",
+            cursor="arrow",
         )
         self._lbl.pack()
 
@@ -307,27 +306,28 @@ class StyledButton(tk.Frame):
 class ThemeToggle(tk.Canvas):
     """Sliding toggle switch styled like macOS System Preferences."""
 
-    W   = 52   # total width  (px)
-    H   = 28   # total height (px)
-    PAD = 3    # padding inside track around the knob
+    W = 52  # total width  (px)
+    H = 28  # total height (px)
+    PAD = 3  # padding inside track around the knob
 
-    TRACK_ON  = "#3b82f6"   # accent blue  – dark mode active
-    TRACK_OFF = "#94a3b8"   # slate grey   – light mode
-    KNOB      = "#ffffff"
+    TRACK_ON = "#3b82f6"  # accent blue  – dark mode active
+    TRACK_OFF = "#94a3b8"  # slate grey   – light mode
+    KNOB = "#ffffff"
 
     def __init__(self, parent, command=None, is_on=False, bg="#f8fafc", **kwargs):
         super().__init__(
             parent,
-            width=self.W, height=self.H,
+            width=self.W,
+            height=self.H,
             bg=bg,
             highlightthickness=0,
             bd=0,
-            cursor="hand2",
+            cursor="arrow",
             **kwargs,
         )
         self._command = command
-        self._is_on   = is_on
-        self._knob_x  = float(self._target_x(is_on))
+        self._is_on = is_on
+        self._knob_x = float(self._target_x(is_on))
         self._anim_id = None
         self._redraw()
         self.bind("<Button-1>", self._on_click)
@@ -495,10 +495,10 @@ class PlotBlock:
 # d2: distance from tip to trailing points along line
 # d3: half-width of the arrowhead perpendicular to line
 _ARROWSHAPE_BASES = {
-    "default":  (8, 10, 3),
-    "sharp":    (12, 15, 2),
-    "wide":     (8, 10, 6),
-    "flat":     (4,  6, 4),
+    "default": (8, 10, 3),
+    "sharp": (12, 15, 2),
+    "wide": (8, 10, 6),
+    "flat": (4, 6, 4),
     "triangle": (10, 10, 5),
 }
 
@@ -618,7 +618,7 @@ class PlotConfigDialog(tk.Toplevel):
         self._col_size = tk.StringVar(value=block.col_size or "(none)")
         self._filename = tk.StringVar(value="No file loaded")
 
-        self._preview_photo = None   # keep PhotoImage alive for preview
+        self._preview_photo = None  # keep PhotoImage alive for preview
 
         self._build_ui()
         self.update_idletasks()
@@ -829,9 +829,9 @@ class PlotConfigDialog(tk.Toplevel):
         self._update_preview()
 
     # Fixed thumbnail dimensions and low DPI — keeps memory and render time small
-    _PREVIEW_W   = 240
-    _PREVIEW_H   = 180
-    _PREVIEW_DPI = 48   # half normal DPI; adequate for a thumbnail
+    _PREVIEW_W = 240
+    _PREVIEW_H = 180
+    _PREVIEW_DPI = 48  # half normal DPI; adequate for a thumbnail
 
     def _update_preview(self, *_):
         """Render a low-res thumbnail of the current plot configuration."""
@@ -852,8 +852,10 @@ class PlotConfigDialog(tk.Toplevel):
         try:
             # Render directly at low DPI — far cheaper than full-res then downscale
             fig = Figure(
-                figsize=(self._PREVIEW_W / self._PREVIEW_DPI,
-                         self._PREVIEW_H / self._PREVIEW_DPI),
+                figsize=(
+                    self._PREVIEW_W / self._PREVIEW_DPI,
+                    self._PREVIEW_H / self._PREVIEW_DPI,
+                ),
                 dpi=self._PREVIEW_DPI,
             )
             ax = fig.add_subplot(111)
@@ -864,9 +866,7 @@ class PlotConfigDialog(tk.Toplevel):
             buf.seek(0)
             pil_img = Image.open(buf).copy()
             buf.close()
-            pil_img = pil_img.resize(
-                (self._PREVIEW_W, self._PREVIEW_H), Image.BILINEAR
-            )
+            pil_img = pil_img.resize((self._PREVIEW_W, self._PREVIEW_H), Image.BILINEAR)
             self._preview_photo = ImageTk.PhotoImage(pil_img)
             self._preview_lbl.configure(image=self._preview_photo, text="")
         except Exception as exc:
@@ -1190,7 +1190,7 @@ class AestheticsPanel(ttk.Frame):
             cf, text="Use single colour", variable=self._use_color_var
         ).pack(side="left")
         self._swatch = tk.Label(
-            cf, bg="#4C72B0", width=4, relief="solid", borderwidth=1, cursor="hand2"
+            cf, bg="#4C72B0", width=4, relief="solid", borderwidth=1, cursor="arrow"
         )
         self._swatch.pack(side="left", padx=6)
         self._swatch.bind("<Button-1>", lambda _: self._pick_color())
@@ -1302,7 +1302,7 @@ class AestheticsPanel(ttk.Frame):
         cf.pack(fill="x", pady=2)
         ttk.Label(cf, text="Color", width=12, anchor="w").pack(side="left")
         shape_swatch = tk.Label(
-            cf, bg=shape.color, width=4, relief="solid", borderwidth=1, cursor="hand2"
+            cf, bg=shape.color, width=4, relief="solid", borderwidth=1, cursor="arrow"
         )
         shape_swatch.pack(side="left", padx=(4, 0))
 
@@ -1360,7 +1360,12 @@ class AestheticsPanel(ttk.Frame):
             ff.pack(fill="x", pady=2)
             ttk.Label(ff, text="Fill", width=12, anchor="w").pack(side="left")
             fill_swatch = tk.Label(
-                ff, bg=shape.fill or "#ffffff", width=4, relief="solid", borderwidth=1, cursor="hand2"
+                ff,
+                bg=shape.fill or "#ffffff",
+                width=4,
+                relief="solid",
+                borderwidth=1,
+                cursor="arrow",
             )
             fill_swatch.pack(side="left", padx=(4, 6))
 
@@ -1421,7 +1426,9 @@ class AestheticsPanel(ttk.Frame):
             make_row(
                 self._obj_body,
                 "Arrow size",
-                lambda p: ttk.Spinbox(p, textvariable=arrow_size_var, from_=5, to=30, width=5),
+                lambda p: ttk.Spinbox(
+                    p, textvariable=arrow_size_var, from_=5, to=30, width=5
+                ),
             )
 
             # Arrowhead style
@@ -1523,7 +1530,12 @@ class AestheticsPanel(ttk.Frame):
         cf.pack(fill="x", pady=2)
         ttk.Label(cf, text="Color", width=12, anchor="w").pack(side="left")
         text_swatch = tk.Label(
-            cf, bg=text_obj.color, width=4, relief="solid", borderwidth=1, cursor="hand2"
+            cf,
+            bg=text_obj.color,
+            width=4,
+            relief="solid",
+            borderwidth=1,
+            cursor="arrow",
         )
         text_swatch.pack(side="left", padx=(4, 0))
 
@@ -1783,10 +1795,14 @@ class AestheticsPanel(ttk.Frame):
                 old_h = self._block.height_px
                 if old_w > 0 and old_h > 0:
                     if is_width_changed:
-                        new_h_px = max(_MIN_BLOCK_SIZE_PX, round(new_w_px * old_h / old_w))
+                        new_h_px = max(
+                            _MIN_BLOCK_SIZE_PX, round(new_w_px * old_h / old_w)
+                        )
                         self._size_h_var.set(self._fmt(new_h_px / scale))
                     else:
-                        new_w_px = max(_MIN_BLOCK_SIZE_PX, round(new_h_px * old_w / old_h))
+                        new_w_px = max(
+                            _MIN_BLOCK_SIZE_PX, round(new_h_px * old_w / old_h)
+                        )
                         self._size_w_var.set(self._fmt(new_w_px / scale))
             self._block.x2 = self._block.x1 + new_w_px
             self._block.y2 = self._block.y1 + new_h_px
@@ -1799,9 +1815,9 @@ class AestheticsPanel(ttk.Frame):
     def _add_obj_size_controls(self, parent, obj, redraw_callback):
         """Append width/height/unit/lock controls to *parent* for a shape or text obj."""
         ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(10, 2))
-        ttk.Label(
-            parent, text="SIZE", font=("", 8, "bold"), foreground="#888"
-        ).pack(anchor="w", pady=(0, 2))
+        ttk.Label(parent, text="SIZE", font=("", 8, "bold"), foreground="#888").pack(
+            anchor="w", pady=(0, 2)
+        )
 
         size_unit_var = tk.StringVar(value="px")
         size_lock_var = tk.BooleanVar(value=True)
@@ -1844,10 +1860,14 @@ class AestheticsPanel(ttk.Frame):
                     old_h = abs(obj.y2 - obj.y1)
                     if old_w > 0 and old_h > 0:
                         if is_width_changed:
-                            new_h_px = max(_MIN_OBJ_SIZE_PX, round(new_w_px * old_h / old_w))
+                            new_h_px = max(
+                                _MIN_OBJ_SIZE_PX, round(new_w_px * old_h / old_w)
+                            )
                             size_h_var.set(self._fmt(to_unit(new_h_px)))
                         else:
-                            new_w_px = max(_MIN_OBJ_SIZE_PX, round(new_h_px * old_w / old_h))
+                            new_w_px = max(
+                                _MIN_OBJ_SIZE_PX, round(new_h_px * old_w / old_h)
+                            )
                             size_w_var.set(self._fmt(to_unit(new_w_px)))
                 # Keep top-left corner; change bottom-right
                 obj.x2 = obj.x1 + new_w_px
@@ -2209,16 +2229,16 @@ class KTFigure:
         self._max_undo = 50
 
         # Grid / snap state
-        self._snap_to_grid: bool = True   # snap is on by default
-        self._show_grid: bool = False     # grid lines hidden by default
+        self._snap_to_grid: bool = True  # snap is on by default
+        self._show_grid: bool = False  # grid lines hidden by default
 
         # Clipboard
         self._clipboard = None
 
         # Theme
         self._is_dark = False
-        self._theme_manual_override = False   # True once user has manually toggled
-        self._theme_widgets: dict = {}        # refs collected during _build_ui
+        self._theme_manual_override = False  # True once user has manually toggled
+        self._theme_widgets: dict = {}  # refs collected during _build_ui
 
         self._build_ui()
         self._mode_select()  # Set default mode to select
@@ -2227,7 +2247,7 @@ class KTFigure:
         self._btn_snap._set_bg("#3b82f6")
         self._btn_snap._lbl.configure(fg="white")
         self._draw_artboard()
-        self._save_state()   # Initial state
+        self._save_state()  # Initial state
         self._auto_theme_check()  # Set theme by time of day, then schedule checks
 
     # -----------------------------------------------------------------------
@@ -2238,9 +2258,9 @@ class KTFigure:
         TC = THEME_LIGHT  # shorthand — always start in light mode
         TB_BG = TC["tb"]
 
-        _all_tbs: list[tk.Frame] = []      # toolbar row frames
-        _all_seps: list[tk.Frame] = []     # separator frames
-        _all_btns: list[StyledButton] = [] # every normal (non-coloured) tbtn
+        _all_tbs: list[tk.Frame] = []  # toolbar row frames
+        _all_seps: list[tk.Frame] = []  # separator frames
+        _all_btns: list[StyledButton] = []  # every normal (non-coloured) tbtn
 
         def tbtn(
             parent,
@@ -2250,7 +2270,7 @@ class KTFigure:
             fg=None,
             hover_bg=None,
             press_bg=None,
-            _themed=True,          # False for coloured special buttons
+            _themed=True,  # False for coloured special buttons
         ):
             b = StyledButton(
                 parent,
@@ -2286,24 +2306,44 @@ class KTFigure:
         sep(tb1)
         tbtn(tb1, "📝  Edit plot", self._edit_selected)
         tbtn(
-            tb1, "🗑  Delete", self._delete_selected,
-            bg="#fee2e2", fg="#991b1b", hover_bg="#fecaca", press_bg="#fca5a5",
+            tb1,
+            "🗑  Delete",
+            self._delete_selected,
+            bg="#fee2e2",
+            fg="#991b1b",
+            hover_bg="#fecaca",
+            press_bg="#fca5a5",
             _themed=False,
         )
         sep(tb1)
         tbtn(
-            tb1, "💾  PNG", self._export_png,
-            bg="#dcfce7", fg="#166534", hover_bg="#bbf7d0", press_bg="#86efac",
+            tb1,
+            "💾  PNG",
+            self._export_png,
+            bg="#dcfce7",
+            fg="#166534",
+            hover_bg="#bbf7d0",
+            press_bg="#86efac",
             _themed=False,
         )
         tbtn(
-            tb1, "📄  PDF", self._export_pdf,
-            bg="#dbeafe", fg="#1e40af", hover_bg="#bfdbfe", press_bg="#93c5fd",
+            tb1,
+            "📄  PDF",
+            self._export_pdf,
+            bg="#dbeafe",
+            fg="#1e40af",
+            hover_bg="#bfdbfe",
+            press_bg="#93c5fd",
             _themed=False,
         )
         tbtn(
-            tb1, "📐  SVG", self._export_svg,
-            bg="#fef3c7", fg="#92400e", hover_bg="#fde68a", press_bg="#fcd34d",
+            tb1,
+            "📐  SVG",
+            self._export_svg,
+            bg="#fef3c7",
+            fg="#92400e",
+            hover_bg="#fde68a",
+            press_bg="#fcd34d",
             _themed=False,
         )
         tbtn(tb1, "❓  Help", self._show_help)
@@ -2344,7 +2384,7 @@ class KTFigure:
         self._btn_line = tbtn(tb2, "📏  Line", self._mode_draw_line)
         self._btn_rect = tbtn(tb2, "▭  Rectangle", self._mode_draw_rect)
         self._btn_circle = tbtn(tb2, "⬭  Circle", self._mode_draw_circle)
-        self._btn_text = tbtn(tb2, "🔤  Text", self._mode_add_text)
+        self._btn_text = tbtn(tb2, "🅃 Text", self._mode_add_text)
 
         # Border between rows
         _b2 = tk.Frame(self.root, bg=TC["sep"], height=1)
@@ -2362,7 +2402,7 @@ class KTFigure:
         tbtn(tb3, "⬆  Align T", self._align_top)
         tbtn(tb3, "⬇  Align B", self._align_bottom)
         tbtn(tb3, "⊟  Align H", self._align_center)
-        tbtn(tb3, "⊞  Align V", self._align_middle)
+        tbtn(tb3, "⎅  Align V", self._align_middle)
         tbtn(tb3, "↔  Distribute H", self._distribute_horizontal)
         tbtn(tb3, "↕  Distribute V", self._distribute_vertical)
         sep(tb3)
@@ -2460,9 +2500,9 @@ class KTFigure:
 
         # Store all themeable widget refs for _apply_theme()
         self._theme_widgets = {
-            "tbs":   _all_tbs,
-            "seps":  _all_seps,
-            "btns":  _all_btns,
+            "tbs": _all_tbs,
+            "seps": _all_seps,
+            "btns": _all_btns,
         }
 
         # Apply initial light-mode ttk styles so dialogs (PlotConfigDialog etc.)
@@ -2534,13 +2574,23 @@ class KTFigure:
         ox, oy = BOARD_PAD, BOARD_PAD
         for x in range(0, A4_W + 1, GRID_SIZE):
             self._cv.create_line(
-                ox + x, oy, ox + x, oy + A4_H,
-                fill="#cccccc", dash=(1, GRID_SIZE - 1), tags="grid",
+                ox + x,
+                oy,
+                ox + x,
+                oy + A4_H,
+                fill="#cccccc",
+                dash=(1, GRID_SIZE - 1),
+                tags="grid",
             )
         for y in range(0, A4_H + 1, GRID_SIZE):
             self._cv.create_line(
-                ox, oy + y, ox + A4_W, oy + y,
-                fill="#cccccc", dash=(1, GRID_SIZE - 1), tags="grid",
+                ox,
+                oy + y,
+                ox + A4_W,
+                oy + y,
+                fill="#cccccc",
+                dash=(1, GRID_SIZE - 1),
+                tags="grid",
             )
         # Place grid above the artboard (white sheet) but below blocks/shapes
         self._cv.tag_raise("grid", "artboard")
@@ -2597,8 +2647,10 @@ class KTFigure:
             # Lines can be horizontal/vertical (zero height/width), so ensure a
             # minimum 6-pixel hit area so they stay clickable.
             eff_pad = max(pad, 6) if s.shape_type == "line" else pad
-            if (x_min - eff_pad <= bx <= x_max + eff_pad
-                    and y_min - eff_pad <= by <= y_max + eff_pad):
+            if (
+                x_min - eff_pad <= bx <= x_max + eff_pad
+                and y_min - eff_pad <= by <= y_max + eff_pad
+            ):
                 return s
         return None
 
@@ -3188,17 +3240,29 @@ class KTFigure:
             style.theme_use("clam")
             style.configure(".", background=TC["panel_bg"], foreground=TC["btn_fg"])
             style.configure("TFrame", background=TC["panel_bg"])
-            style.configure("TLabel", background=TC["panel_bg"], foreground=TC["btn_fg"])
-            style.configure("TEntry", fieldbackground="#3c3c3c", foreground=TC["btn_fg"])
-            style.configure("TCombobox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"])
-            style.configure("TSpinbox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"])
-            style.configure("TCheckbutton", background=TC["panel_bg"], foreground=TC["btn_fg"])
+            style.configure(
+                "TLabel", background=TC["panel_bg"], foreground=TC["btn_fg"]
+            )
+            style.configure(
+                "TEntry", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
+            )
+            style.configure(
+                "TCombobox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
+            )
+            style.configure(
+                "TSpinbox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
+            )
+            style.configure(
+                "TCheckbutton", background=TC["panel_bg"], foreground=TC["btn_fg"]
+            )
             style.configure("TButton", background=TC["btn"], foreground=TC["btn_fg"])
             style.configure("TPanedwindow", background=TC["canvas"])
             style.configure("Horizontal.TScrollbar", background=TC["btn"])
             style.configure("Vertical.TScrollbar", background=TC["btn"])
             style.configure("TNotebook", background=TC["panel_bg"])
-            style.configure("TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"])
+            style.configure(
+                "TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"]
+            )
             style.map("TNotebook.Tab", background=[("selected", "#505050")])
         else:
             style.theme_use("clam")
@@ -3206,9 +3270,13 @@ class KTFigure:
             style.configure("TFrame", background=TC["panel_bg"])
             style.configure("TLabel", background=TC["panel_bg"], foreground="#1e293b")
             style.configure("TEntry", fieldbackground="#ffffff", foreground="#1e293b")
-            style.configure("TCombobox", fieldbackground="#ffffff", foreground="#1e293b")
+            style.configure(
+                "TCombobox", fieldbackground="#ffffff", foreground="#1e293b"
+            )
             style.configure("TSpinbox", fieldbackground="#ffffff", foreground="#1e293b")
-            style.configure("TCheckbutton", background=TC["panel_bg"], foreground="#1e293b")
+            style.configure(
+                "TCheckbutton", background=TC["panel_bg"], foreground="#1e293b"
+            )
             style.configure("TButton", background="#e2e8f0", foreground="#1e293b")
             style.configure("TPanedwindow", background=TC["canvas"])
             style.configure("Horizontal.TScrollbar", background="#cbd5e1")
@@ -3224,10 +3292,18 @@ class KTFigure:
         # Re-highlight the active mode button so it stays correct
         self._highlight_mode_button(
             next(
-                (b for b in [
-                    self._btn_select, self._btn_draw, self._btn_line,
-                    self._btn_rect, self._btn_circle, self._btn_text,
-                ] if b._is_active),
+                (
+                    b
+                    for b in [
+                        self._btn_select,
+                        self._btn_draw,
+                        self._btn_line,
+                        self._btn_rect,
+                        self._btn_circle,
+                        self._btn_text,
+                    ]
+                    if b._is_active
+                ),
                 self._btn_select,
             )
         )
@@ -3556,7 +3632,12 @@ class KTFigure:
                                 all_y1 = min(obj.y1 for obj in self._selected_objects)
                                 all_x2 = max(obj.x2 for obj in self._selected_objects)
                                 all_y2 = max(obj.y2 for obj in self._selected_objects)
-                                self._resize_group_bbox = (all_x1, all_y1, all_x2, all_y2)
+                                self._resize_group_bbox = (
+                                    all_x1,
+                                    all_y1,
+                                    all_x2,
+                                    all_y2,
+                                )
                                 self._resize_block = None
                                 self._resize_shape = None
                             elif self._selected:
@@ -3593,7 +3674,9 @@ class KTFigure:
                                     self._selected_text.x2,
                                     self._selected_text.y2,
                                 )
-                                self._resize_text_orig_font = self._selected_text.font_size
+                                self._resize_text_orig_font = (
+                                    self._selected_text.font_size
+                                )
                             return
 
             # Check if clicking inside a block, shape, or text
@@ -3950,16 +4033,16 @@ class KTFigure:
 
             # Compute scale from how the dragged corner has moved, relative to
             # the opposite (fixed) corner of the group bounding box.
-            if c == "se":   # anchor = NW (gx1, gy1)
+            if c == "se":  # anchor = NW (gx1, gy1)
                 scale_x = (bx - gx1) / gw if gw > 0 else 1
                 scale_y = (by - gy1) / gh if gh > 0 else 1
-            elif c == "sw": # anchor = NE (gx2, gy1)
+            elif c == "sw":  # anchor = NE (gx2, gy1)
                 scale_x = (gx2 - bx) / gw if gw > 0 else 1
                 scale_y = (by - gy1) / gh if gh > 0 else 1
-            elif c == "ne": # anchor = SW (gx1, gy2)
+            elif c == "ne":  # anchor = SW (gx1, gy2)
                 scale_x = (bx - gx1) / gw if gw > 0 else 1
                 scale_y = (gy2 - by) / gh if gh > 0 else 1
-            else:           # nw — anchor = SE (gx2, gy2)
+            else:  # nw — anchor = SE (gx2, gy2)
                 scale_x = (gx2 - bx) / gw if gw > 0 else 1
                 scale_y = (gy2 - by) / gh if gh > 0 else 1
 
@@ -3976,22 +4059,22 @@ class KTFigure:
             for obj in self._resize_all_objects:
                 ix1, iy1, ix2, iy2 = self._resize_initial_dims[id(obj)]
 
-                if c == "se":       # anchor = NW (gx1, gy1)
+                if c == "se":  # anchor = NW (gx1, gy1)
                     obj.x1 = gx1 + (ix1 - gx1) * scale_x
                     obj.x2 = gx1 + (ix2 - gx1) * scale_x
                     obj.y1 = gy1 + (iy1 - gy1) * scale_y
                     obj.y2 = gy1 + (iy2 - gy1) * scale_y
-                elif c == "sw":     # anchor = NE (gx2, gy1)
+                elif c == "sw":  # anchor = NE (gx2, gy1)
                     obj.x1 = gx2 - (gx2 - ix1) * scale_x
                     obj.x2 = gx2 - (gx2 - ix2) * scale_x
                     obj.y1 = gy1 + (iy1 - gy1) * scale_y
                     obj.y2 = gy1 + (iy2 - gy1) * scale_y
-                elif c == "ne":     # anchor = SW (gx1, gy2)
+                elif c == "ne":  # anchor = SW (gx1, gy2)
                     obj.x1 = gx1 + (ix1 - gx1) * scale_x
                     obj.x2 = gx1 + (ix2 - gx1) * scale_x
                     obj.y1 = gy2 - (gy2 - iy1) * scale_y
                     obj.y2 = gy2 - (gy2 - iy2) * scale_y
-                else:               # nw — anchor = SE (gx2, gy2)
+                else:  # nw — anchor = SE (gx2, gy2)
                     obj.x1 = gx2 - (gx2 - ix1) * scale_x
                     obj.x2 = gx2 - (gx2 - ix2) * scale_x
                     obj.y1 = gy2 - (gy2 - iy1) * scale_y
@@ -4386,7 +4469,9 @@ class KTFigure:
             return
 
         # Handle finishing a resize
-        if self._resize_corner and (self._resize_block or self._resize_shape or self._resize_text):
+        if self._resize_corner and (
+            self._resize_block or self._resize_shape or self._resize_text
+        ):
             if self._resize_block:
                 b = self._resize_block
                 self._resize_block = None
@@ -4572,7 +4657,9 @@ class KTFigure:
 
         # Check if hovering over a block or shape (for moving)
         bx, by = self._ev_board(event)
-        if self._block_at(bx, by, pad=HOVER_PAD) or self._shape_at(bx, by, pad=HOVER_PAD):
+        if self._block_at(bx, by, pad=HOVER_PAD) or self._shape_at(
+            bx, by, pad=HOVER_PAD
+        ):
             self._cv.configure(cursor="fleur")  # move cursor
         else:
             self._cv.configure(cursor="arrow")
@@ -5273,9 +5360,7 @@ class KTFigure:
             if block.rect_id:
                 self._cv.coords(block.rect_id, cx1, cy1, cx2, cy2)
             if block.label_id:
-                self._cv.coords(
-                    block.label_id, (cx1 + cx2) / 2, (cy1 + cy2) / 2
-                )
+                self._cv.coords(block.label_id, (cx1 + cx2) / 2, (cy1 + cy2) / 2)
         # Refresh selection handles whenever the block changes size
         if self._selected == block:
             self._clear_handles()
@@ -5454,7 +5539,7 @@ TOOLBAR (left to right)
    ⬚ Select  — default mode; click objects to select/move/resize
    ✏ Plot    — drag on artboard to create a new plot region
    Shapes    — line, rectangle, circle tools
-   🔤 Text   — click to drop a text label; drag to set a custom size
+   🅃 Text   — click to drop a text label; drag to set a custom size
    Edit plot — reopen data / type dialog for selected plot
    Delete    — remove the selected object(s)
    PNG / PDF / SVG — export the artboard
