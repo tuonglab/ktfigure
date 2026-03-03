@@ -62,6 +62,7 @@ def _scrot(output_path: str, root: "tk.Tk") -> bool:
     """Take a screenshot cropped to the Tk window bounds."""
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png")
     os.close(tmp_fd)
+    os.remove(tmp_path)  # scrot won't overwrite an existing file
     try:
         subprocess.run(
             ["scrot", "--quality", "90", tmp_path],
