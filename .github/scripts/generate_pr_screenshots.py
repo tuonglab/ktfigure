@@ -15,6 +15,7 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 
@@ -42,6 +43,12 @@ except ImportError as exc:
     print(f"pandas not available: {exc}", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from PIL import Image as _PILImage
+except ImportError as exc:
+    print(f"Pillow not available: {exc}", file=sys.stderr)
+    sys.exit(1)
+
 sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 from ktfigure import KTFigure, PlotBlock, Shape  # noqa: E402
 
@@ -51,18 +58,28 @@ def _pump(root: "tk.Tk", n: int = 30) -> None:
         root.update()
 
 
-def _scrot(output_path: str) -> bool:
-    """Take a full-screen screenshot with scrot."""
+def _scrot(output_path: str, root: "tk.Tk") -> bool:
+    """Take a screenshot cropped to the Tk window bounds."""
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png")
+    os.close(tmp_fd)
     try:
         subprocess.run(
-            ["scrot", "--quality", "90", output_path],
+            ["scrot", "--quality", "90", tmp_path],
             check=True,
             capture_output=True,
         )
+        x = root.winfo_rootx()
+        y = root.winfo_rooty()
+        w = root.winfo_width()
+        h = root.winfo_height()
+        _PILImage.open(tmp_path).crop((x, y, x + w, y + h)).save(output_path)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         print(f"  ⚠ scrot failed: {exc}", file=sys.stderr)
         return False
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +157,8 @@ try:
     # ── single screenshot capturing the full scene ─────────────────────────
     fname = "gui_screenshot.png"
     path = os.path.join(OUT, fname)
-    label = f"KTFigure – {plot_type}plot · small circle · large circle · rectangle"
-    if _scrot(path):
+    label = "KTFigure GUI screenshot"
+    if _scrot(path, root):
         manifest.append({"file": fname, "path": path, "label": label})
         print(f"  ✓ {path}")
     else:
