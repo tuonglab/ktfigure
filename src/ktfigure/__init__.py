@@ -2276,6 +2276,12 @@ class KTFigure:
         # Zoom state
         self._zoom: float = 1.0  # 1.0 = 100%
 
+        # Multi-artboard state
+        # Each entry: {"blocks": [...], "shapes": [...], "texts": [...],
+        #              "undo_stack": [...], "redo_stack": [...]}
+        self._artboards: list[dict] = []  # populated after lists exist
+        self._active_board: int = 0
+
         # Clipboard
         self._clipboard = None
 
@@ -2285,6 +2291,17 @@ class KTFigure:
         self._theme_widgets: dict = {}  # refs collected during _build_ui
 
         self._build_ui()
+        # Wire artboard 0 to the already-created list objects
+        self._artboards = [
+            {
+                "blocks": self._blocks,
+                "shapes": self._shapes,
+                "texts": self._texts,
+                "undo_stack": self._undo_stack,
+                "redo_stack": self._redo_stack,
+            }
+        ]
+        self._rebuild_artboard_buttons()
         self._mode_select()  # Set default mode to select
         # Snap is on by default – reflect that in the button visual state
         self._btn_snap._is_active = True
@@ -2592,7 +2609,62 @@ class KTFigure:
         )
         self._btn_zoom_in.pack(side="left")
 
-        # ── status label (fills remaining space on the right) ───────────────
+        # ── center-view button (next to zoom) ──────────────────────────────
+        self._btn_center = tk.Button(
+            zoom_frame,
+            text="⊙",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._center_view,
+            cursor="arrow",
+        )
+        self._btn_center.pack(side="left", padx=(4, 0))
+
+        # ── artboard controls (bottom-right) ────────────────────────────────
+        ab_right = tk.Frame(self._status_bar, bg=TC["tb"])
+        ab_right.pack(side="right", padx=(4, 8), pady=2)
+
+        self._btn_del_board = tk.Button(
+            ab_right,
+            text="×",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._delete_artboard,
+            cursor="arrow",
+            state="disabled",
+        )
+        self._btn_del_board.pack(side="right", padx=(1, 0))
+
+        self._btn_add_board = tk.Button(
+            ab_right,
+            text="+",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._add_artboard,
+            cursor="arrow",
+        )
+        self._btn_add_board.pack(side="right", padx=(1, 2))
+
+        self._artboard_btns_frame = tk.Frame(ab_right, bg=TC["tb"])
+        self._artboard_btns_frame.pack(side="right")
+        self._artboard_tab_btns: list = []
+
+        # ── status label (fills remaining space) ────────────────────────────
         self._status = tk.Label(
             self._status_bar,
             text="Ready — drag on the white A4 board to draw a plot region.",
@@ -2805,6 +2877,161 @@ class KTFigure:
             self._zoom_var.set(str(round(self._zoom * 100)))
             return
         self._set_zoom(pct / 100.0)
+
+    # -----------------------------------------------------------------------
+    # Center-view helper
+    # -----------------------------------------------------------------------
+    def _center_view(self):
+        """Scroll the canvas so the artboard is centered in the viewport."""
+        self._cv.update_idletasks()
+        cw = self._cv.winfo_width()
+        ch = self._cv.winfo_height()
+        z = self._zoom
+        total_w = (A4_W + 2 * BOARD_PAD) * z
+        total_h = (A4_H + 2 * BOARD_PAD) * z
+        # Artboard center in canvas coordinates
+        artboard_cx = (BOARD_PAD + A4_W / 2) * z
+        artboard_cy = (BOARD_PAD + A4_H / 2) * z
+        # Fraction of scroll region to show at top-left of viewport
+        xfrac = max(0.0, min(1.0, (artboard_cx - cw / 2) / total_w))
+        yfrac = max(0.0, min(1.0, (artboard_cy - ch / 2) / total_h))
+        self._cv.xview_moveto(xfrac)
+        self._cv.yview_moveto(yfrac)
+        self._set_status("View centered on artboard.")
+
+    # -----------------------------------------------------------------------
+    # Multi-artboard helpers
+    # -----------------------------------------------------------------------
+    def _sync_artboard(self):
+        """Write current _blocks/_shapes/_texts back to the active artboard entry.
+
+        Must be called whenever these lists are replaced (e.g. after undo/redo).
+        """
+        ab = self._artboards[self._active_board]
+        ab["blocks"] = self._blocks
+        ab["shapes"] = self._shapes
+        ab["texts"] = self._texts
+        ab["undo_stack"] = self._undo_stack
+        ab["redo_stack"] = self._redo_stack
+
+    def _rebuild_artboard_buttons(self):
+        """Rebuild the page-tab buttons in the status bar."""
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
+        for w in self._artboard_btns_frame.winfo_children():
+            w.destroy()
+        self._artboard_tab_btns = []
+        for i in range(len(self._artboards)):
+            is_active = i == self._active_board
+            btn = tk.Button(
+                self._artboard_btns_frame,
+                text=f"p.{i + 1}",
+                bd=0,
+                relief="flat",
+                bg="#3b82f6" if is_active else TC["btn"],
+                fg="white" if is_active else TC["btn_fg"],
+                activebackground=TC["btn_hover"],
+                font=("", 9),
+                command=lambda idx=i: self._switch_artboard(idx),
+                cursor="arrow",
+            )
+            btn.pack(side="left", padx=1)
+            self._artboard_tab_btns.append(btn)
+        # Enable delete button only when more than one artboard exists
+        self._btn_del_board.configure(
+            state="normal" if len(self._artboards) > 1 else "disabled"
+        )
+
+    def _switch_artboard(self, idx: int):
+        """Save current artboard state and switch to artboard *idx*."""
+        if idx == self._active_board:
+            return
+        # Save current state into the artboard dict
+        self._sync_artboard()
+        self._clear_artboard_selection()
+        # Switch
+        self._active_board = idx
+        ab = self._artboards[idx]
+        self._blocks = ab["blocks"]
+        self._shapes = ab["shapes"]
+        self._texts = ab["texts"]
+        self._undo_stack = ab["undo_stack"]
+        self._redo_stack = ab["redo_stack"]
+        # Redraw
+        self._cv.delete("all")
+        self._draw_artboard()
+        if self._show_grid:
+            self._draw_grid()
+        self._redraw_all()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._set_status(f"Switched to Page {idx + 1}.")
+
+    def _add_artboard(self):
+        """Add a new blank artboard and switch to it."""
+        self._sync_artboard()
+        new_ab = {
+            "blocks": [],
+            "shapes": [],
+            "texts": [],
+            "undo_stack": [],
+            "redo_stack": [],
+        }
+        self._artboards.append(new_ab)
+        idx = len(self._artboards) - 1
+        self._active_board = idx
+        self._blocks = new_ab["blocks"]
+        self._shapes = new_ab["shapes"]
+        self._texts = new_ab["texts"]
+        self._undo_stack = new_ab["undo_stack"]
+        self._redo_stack = new_ab["redo_stack"]
+        self._clear_artboard_selection()
+        # Redraw blank artboard
+        self._cv.delete("all")
+        self._draw_artboard()
+        if self._show_grid:
+            self._draw_grid()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._set_status(f"Added Page {idx + 1}.")
+
+    def _delete_artboard(self):
+        """Delete the current artboard (not allowed when only one exists)."""
+        if len(self._artboards) <= 1:
+            self._set_status("Cannot delete the last page.")
+            return
+        idx = self._active_board
+        self._artboards.pop(idx)
+        new_idx = max(0, idx - 1)
+        self._active_board = new_idx
+        ab = self._artboards[new_idx]
+        self._blocks = ab["blocks"]
+        self._shapes = ab["shapes"]
+        self._texts = ab["texts"]
+        self._undo_stack = ab["undo_stack"]
+        self._redo_stack = ab["redo_stack"]
+        self._clear_artboard_selection()
+        # Redraw
+        self._cv.delete("all")
+        self._draw_artboard()
+        if self._show_grid:
+            self._draw_grid()
+        self._redraw_all()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._set_status(f"Deleted page. Now on Page {new_idx + 1}.")
+
+    def _clear_artboard_selection(self):
+        """Reset all selection and transient drag state when switching pages."""
+        self._selected = None
+        self._selected_shape = None
+        self._selected_text = None
+        self._selected_objects = []
+        self._resize_handles = []
+        self._drag_start = None
+        self._rubber_rect = None
 
     def _block_at(self, bx, by, pad=0):
         for b in reversed(self._blocks):
@@ -3411,6 +3638,22 @@ class KTFigure:
             bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
         )
         self._zoom_entry.master.configure(bg=TC["tb"])
+
+        # Center-view button
+        self._btn_center.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+
+        # Artboard controls
+        self._btn_add_board.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        self._btn_del_board.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        self._artboard_btns_frame.configure(bg=TC["tb"])
+        self._artboard_btns_frame.master.configure(bg=TC["tb"])
+        self._rebuild_artboard_buttons()
 
         # Canvas outer frame and canvas itself
         self._canvas_outer.configure(bg=TC["canvas"])
@@ -5263,6 +5506,9 @@ class KTFigure:
         self._shapes = copy.deepcopy(state["shapes"])
         self._texts = copy.deepcopy(state.get("texts", []))
 
+        # Sync new lists back into the active artboard entry
+        self._sync_artboard()
+
         # Clear selections
         self._selected = None
         self._selected_shape = None
@@ -5294,6 +5540,9 @@ class KTFigure:
         self._blocks = copy.deepcopy(state["blocks"])
         self._shapes = copy.deepcopy(state["shapes"])
         self._texts = copy.deepcopy(state.get("texts", []))
+
+        # Sync new lists back into the active artboard entry
+        self._sync_artboard()
 
         # Clear selections
         self._selected = None
