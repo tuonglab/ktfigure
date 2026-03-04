@@ -1566,3 +1566,47 @@ class TestCoverageBoost:
         self.app._selected_objects = [t]
         self.app._redraw_selected_handles()  # must not raise
         pump(self.root)
+
+    # ------------------------------------------------------------------
+    # _delete_key focus guard (entry widget has focus — must not delete)
+    # ------------------------------------------------------------------
+
+    def test_delete_key_ignores_when_entry_focused(self):
+        """_delete_key must not delete a selected shape when an Entry has focus."""
+        s = Shape(10, 10, 150, 80, "rectangle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_objects = []
+        self.app._selected_shape = s
+        before = len(self.app._shapes)
+
+        # Simulate focus on a tk.Entry (winfo_class → "Entry")
+        mock_entry = MagicMock()
+        mock_entry.winfo_class.return_value = "Entry"
+        with patch.object(self.app.root, "focus_get", return_value=mock_entry):
+            self.app._delete_key()
+
+        assert len(self.app._shapes) == before, (
+            "_delete_key should not remove a shape when an Entry widget has focus"
+        )
+        assert self.app._selected_shape is s
+
+    def test_delete_key_ignores_when_spinbox_focused(self):
+        """_delete_key must not delete a selected shape when a Spinbox has focus."""
+        s = Shape(10, 10, 150, 80, "circle")
+        self.app._shapes.append(s)
+        self.app._draw_shape(s)
+        self.app._selected_objects = []
+        self.app._selected_shape = s
+        before = len(self.app._shapes)
+
+        # Simulate focus on a ttk.Spinbox (winfo_class → "TSpinbox")
+        mock_spinbox = MagicMock()
+        mock_spinbox.winfo_class.return_value = "TSpinbox"
+        with patch.object(self.app.root, "focus_get", return_value=mock_spinbox):
+            self.app._delete_key()
+
+        assert len(self.app._shapes) == before, (
+            "_delete_key should not remove a shape when a Spinbox widget has focus"
+        )
+        assert self.app._selected_shape is s
