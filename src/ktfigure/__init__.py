@@ -2511,10 +2511,10 @@ class KTFigure:
         vsb.pack(side="right", fill="y")
         self._cv.pack(side="left", fill="both", expand=True)
 
-        # Enable mouse wheel scrolling
+        # Enable mouse wheel scrolling (sets up <Shift-*> horizontal bindings)
         bind_mousewheel(self._cv, self._cv, "both")
 
-        # Ctrl+scroll (touchpad pinch-to-zoom) → zoom in/out
+        # Ctrl+scroll (keyboard Ctrl + wheel, or Linux Button-4/5) → zoom
         def _on_ctrl_scroll(event):
             if event.num == 4 or event.delta > 0:
                 self._zoom_in()
@@ -2525,6 +2525,43 @@ class KTFigure:
         self._cv.bind("<Control-MouseWheel>", _on_ctrl_scroll)   # Windows/macOS
         self._cv.bind("<Control-Button-4>", _on_ctrl_scroll)     # Linux scroll up
         self._cv.bind("<Control-Button-5>", _on_ctrl_scroll)     # Linux scroll down
+
+        # Replace the plain <MouseWheel> binding set by bind_mousewheel with a
+        # canvas-specific handler that also catches Windows precision-touchpad
+        # pinch-to-zoom, which sends <MouseWheel> with the Ctrl modifier state
+        # bit (0x0004) set instead of the dedicated <Control-MouseWheel> event.
+        def _on_canvas_wheel(event):
+            if event.state & 0x0004:  # Ctrl modifier bit → zoom
+                return _on_ctrl_scroll(event)
+            # Normal scroll: vertical by default, horizontal when Shift held.
+            d = -1 if (event.num == 4 or event.delta > 0) else 1
+            if event.state & 0x1:  # Shift key → horizontal
+                self._cv.xview_scroll(d, "units")
+            else:
+                self._cv.yview_scroll(d, "units")
+
+        self._cv.bind("<MouseWheel>", _on_canvas_wheel)   # replaces bind_mousewheel's
+        self._cv.bind("<Button-4>", _on_canvas_wheel)
+        self._cv.bind("<Button-5>", _on_canvas_wheel)
+        # Keep a reference so tests can invoke the handler directly.
+        self._on_canvas_wheel = _on_canvas_wheel
+
+        # macOS trackpad pinch-to-zoom → <Magnify> event
+        if sys.platform == "darwin":
+            _magnify_accum = 0.0
+
+            def _on_magnify(event):
+                nonlocal _magnify_accum
+                _magnify_accum += event.delta
+                if _magnify_accum >= 0.1:
+                    _magnify_accum = 0.0
+                    self._zoom_in()
+                elif _magnify_accum <= -0.1:
+                    _magnify_accum = 0.0
+                    self._zoom_out()
+                return "break"
+
+            self._cv.bind("<Magnify>", _on_magnify)
 
         self._cv.configure(
             scrollregion=(

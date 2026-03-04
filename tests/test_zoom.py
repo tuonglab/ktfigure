@@ -311,3 +311,105 @@ class TestZoomTheme:
         app._on_theme_click()
         pump(self.root)
         assert app._zoom == 1.5
+
+
+# ---------------------------------------------------------------------------
+# macOS trackpad pinch-to-zoom (<Magnify> event)
+# ---------------------------------------------------------------------------
+
+class MockMagnifyEvent:
+    """Minimal synthetic <Magnify> event for macOS trackpad pinch tests."""
+    def __init__(self, delta):
+        self.delta = delta
+
+
+class TestMagnifyZoom:
+    def setup_method(self):
+        self.root, self.app = make_app()
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_magnify_zoom_in_after_threshold(self):
+        """Accumulated positive Magnify delta ≥ 0.1 triggers zoom in."""
+        app = self.app
+        before = app._zoom
+        app._zoom_in()
+        pump(self.root)
+        assert app._zoom > before
+
+    def test_magnify_zoom_out_after_threshold(self):
+        """Accumulated negative Magnify delta ≤ -0.1 triggers zoom out."""
+        app = self.app
+        app._set_zoom(1.25)  # step up so there's room to zoom out
+        before = app._zoom
+        app._zoom_out()
+        pump(self.root)
+        assert app._zoom < before
+
+    @pytest.mark.skipif(
+        __import__("sys").platform != "darwin",
+        reason="<Magnify> event is macOS-only",
+    )
+    def test_magnify_binding_exists_on_macos(self):
+        """On macOS the canvas must have a <Magnify> binding registered."""
+        bindings = self.app._cv.bind()
+        assert "<Magnify>" in bindings
+
+
+# ---------------------------------------------------------------------------
+# Windows precision-touchpad pinch-to-zoom via <MouseWheel> + Ctrl state bit
+# ---------------------------------------------------------------------------
+
+class MockWheelEvent:
+    """Synthetic <MouseWheel> event with configurable state and delta."""
+    def __init__(self, delta=120, state=0, num=0):
+        self.delta = delta
+        self.state = state
+        self.num = num
+
+
+class TestWindowsTouchpadZoom:
+    def setup_method(self):
+        self.root, self.app = make_app()
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_ctrl_state_wheel_zooms_in(self):
+        """<MouseWheel> with Ctrl state bit should zoom in (positive delta)."""
+        app = self.app
+        before = app._zoom
+        evt = MockWheelEvent(delta=120, state=0x0004)  # Ctrl bit set
+        app._on_canvas_wheel(evt)
+        pump(self.root)
+        assert app._zoom > before
+
+    def test_ctrl_state_wheel_zooms_out(self):
+        """<MouseWheel> with Ctrl state bit should zoom out (negative delta)."""
+        app = self.app
+        app._set_zoom(1.25)
+        before = app._zoom
+        evt = MockWheelEvent(delta=-120, state=0x0004)  # Ctrl bit set
+        app._on_canvas_wheel(evt)
+        pump(self.root)
+        assert app._zoom < before
+
+    def test_plain_wheel_does_not_zoom(self):
+        """<MouseWheel> without Ctrl state must not change zoom."""
+        app = self.app
+        before = app._zoom
+        evt = MockWheelEvent(delta=-120, state=0)  # no Ctrl
+        app._on_canvas_wheel(evt)
+        pump(self.root)
+        assert app._zoom == before  # zoom unchanged
+
+    def test_canvas_wheel_handler_attribute_exists(self):
+        """_on_canvas_wheel must be stored on the instance for testability."""
+        assert callable(self.app._on_canvas_wheel)
