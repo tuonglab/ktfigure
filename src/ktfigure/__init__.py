@@ -2546,7 +2546,11 @@ class KTFigure:
         # Keep a reference so tests can invoke the handler directly.
         self._on_canvas_wheel = _on_canvas_wheel
 
-        # macOS trackpad pinch-to-zoom → <Magnify> event
+        # macOS trackpad pinch-to-zoom → <Magnify> event.
+        # The sys.platform guard skips this on non-macOS entirely; the
+        # try/except handles macOS builds whose Tk was compiled without
+        # gesture support (e.g. XQuartz-backed conda/miniforge packages)
+        # where bind("<Magnify>") raises TclError and would crash startup.
         if sys.platform == "darwin":
             _magnify_accum = 0.0
 
@@ -2561,7 +2565,10 @@ class KTFigure:
                     self._zoom_out()
                 return "break"
 
-            self._cv.bind("<Magnify>", _on_magnify)
+            try:
+                self._cv.bind("<Magnify>", _on_magnify)
+            except tk.TclError:
+                pass  # Tk build on this macOS installation doesn't support <Magnify>
 
         self._cv.configure(
             scrollregion=(
