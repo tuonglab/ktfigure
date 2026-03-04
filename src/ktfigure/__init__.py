@@ -52,6 +52,7 @@ except ImportError:
 A4_W = 794  # A4 width  at 96 DPI  (210 mm → 8.27 in → 794 px)
 A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
+BOARD_GAP = round(0.5 * 96 / 2.54)  # ~19 px gap between side-by-side artboards (0.5 cm)
 DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
 HOVER_PAD = 5  # pixel buffer around objects for hover/cursor detection
@@ -2691,52 +2692,112 @@ class KTFigure:
         self._apply_theme()
 
     def _draw_artboard(self):
+        """Draw all artboards side-by-side on the canvas."""
         z = self._zoom
-        ox, oy = BOARD_PAD * z, BOARD_PAD * z
+        oy = BOARD_PAD * z
         w, h = A4_W * z, A4_H * z
-        # drop shadow
-        self._cv.create_rectangle(
-            ox + 5,
-            oy + 5,
-            ox + w + 5,
-            oy + h + 5,
-            fill="#222",
-            outline="",
-            tags="bg",
-        )
-        # white sheet
-        self._cv.create_rectangle(
-            ox,
-            oy,
-            ox + w,
-            oy + h,
-            fill="white",
-            outline="#bbb",
-            width=1,
-            tags="artboard",
-        )
-        # subtle rulers
-        for x in range(0, A4_W + 1, 100):
-            self._cv.create_line(
-                ox + x * z, oy, ox + x * z, oy + 8 * z, fill="#ccc", tags="ruler"
+        for idx in range(len(self._artboards)):
+            ox = self._board_x_origin(idx) * z
+            is_active = idx == self._active_board
+            # drop shadow
+            self._cv.create_rectangle(
+                ox + 5,
+                oy + 5,
+                ox + w + 5,
+                oy + h + 5,
+                fill="#222",
+                outline="",
+                tags="bg",
             )
-        for y in range(0, A4_H + 1, 100):
-            self._cv.create_line(
-                ox, oy + y * z, ox + 8 * z, oy + y * z, fill="#ccc", tags="ruler"
+            # white sheet — active board gets blue border
+            border_color = "#3b82f6" if is_active else "#bbb"
+            border_width = 2 if is_active else 1
+            self._cv.create_rectangle(
+                ox,
+                oy,
+                ox + w,
+                oy + h,
+                fill="white",
+                outline=border_color,
+                width=border_width,
+                tags="artboard",
             )
+            # page label above the artboard
+            label_y = max(oy - max(14, round(16 * z)), 4)
+            self._cv.create_text(
+                ox + w / 2,
+                label_y,
+                text=f"Page {idx + 1}",
+                fill="#888888",
+                font=("", max(7, round(9 * z))),
+                tags="ruler",
+            )
+            # subtle rulers
+            for x in range(0, A4_W + 1, 100):
+                self._cv.create_line(
+                    ox + x * z, oy, ox + x * z, oy + 8 * z, fill="#ccc", tags="ruler"
+                )
+            for y in range(0, A4_H + 1, 100):
+                self._cv.create_line(
+                    ox, oy + y * z, ox + 8 * z, oy + y * z, fill="#ccc", tags="ruler"
+                )
 
     # -----------------------------------------------------------------------
     # Coordinate helpers
     # -----------------------------------------------------------------------
+    def _board_x_origin(self, idx: int) -> float:
+        """Canvas x-coordinate at zoom=1 of the left edge of artboard *idx*."""
+        return BOARD_PAD + idx * (A4_W + BOARD_GAP)
+
+    def _canvas_total_width(self) -> float:
+        """Total canvas width at zoom=1 needed to show all side-by-side artboards."""
+        n = len(self._artboards)
+        return BOARD_PAD + n * A4_W + max(0, n - 1) * BOARD_GAP + BOARD_PAD
+
+    def _canvas_total_height(self) -> float:
+        """Total canvas height at zoom=1 (fixed: one row of artboards)."""
+        return A4_H + 2 * BOARD_PAD
+
+    def _update_scrollregion(self):
+        """Update the canvas scroll region to cover all artboards at current zoom."""
+        z = self._zoom
+        self._cv.configure(
+            scrollregion=(
+                0,
+                0,
+                self._canvas_total_width() * z,
+                self._canvas_total_height() * z,
+            )
+        )
+
     def _to_board(self, cx, cy):
         z = self._zoom
-        bx = cx / z - BOARD_PAD
+        ox = self._board_x_origin(self._active_board)
+        bx = cx / z - ox
         by = cy / z - BOARD_PAD
         return max(0, min(bx, A4_W)), max(0, min(by, A4_H))
 
     def _to_canvas(self, bx, by):
         z = self._zoom
-        return (bx + BOARD_PAD) * z, (by + BOARD_PAD) * z
+        ox = self._board_x_origin(self._active_board)
+        return (ox + bx) * z, (BOARD_PAD + by) * z
+
+    def _hit_board_idx(self, cx: float, cy: float) -> "int | None":
+        """Return the index of the artboard that contains canvas coords (cx, cy).
+
+        Returns None when the click is not on any artboard.
+        """
+        z = self._zoom
+        oy0 = BOARD_PAD * z
+        oy1 = oy0 + A4_H * z
+        if not (oy0 <= cy <= oy1):
+            return None
+        for i in range(len(self._artboards)):
+            ox0 = self._board_x_origin(i) * z
+            ox1 = ox0 + A4_W * z
+            if ox0 <= cx <= ox1:
+                return i
+        return None
 
     def _ev_board(self, event):
         return self._to_board(self._cv.canvasx(event.x), self._cv.canvasy(event.y))
@@ -2755,13 +2816,14 @@ class KTFigure:
         return self._snap(bx), self._snap(by)
 
     def _draw_grid(self):
-        """Draw grid lines across the artboard.
+        """Draw grid lines across the active artboard.
 
         The artboard is always rendered on a white background regardless of
         the UI theme, so a fixed light-grey colour is appropriate here.
         """
         z = self._zoom
-        ox, oy = BOARD_PAD * z, BOARD_PAD * z
+        ox = self._board_x_origin(self._active_board) * z
+        oy = BOARD_PAD * z
         for x in range(0, A4_W + 1, GRID_SIZE):
             self._cv.create_line(
                 ox + x * z,
@@ -2832,14 +2894,8 @@ class KTFigure:
         self._zoom = factor
         pct = round(factor * 100)
         self._zoom_var.set(str(pct))
-        # Update scrollregion
-        self._cv.configure(
-            scrollregion=(
-                0, 0,
-                (A4_W + 2 * BOARD_PAD) * self._zoom,
-                (A4_H + 2 * BOARD_PAD) * self._zoom,
-            )
-        )
+        # Update scrollregion to cover all artboards
+        self._update_scrollregion()
         # Full redraw with new zoom
         self._cv.delete("all")
         self._draw_artboard()
@@ -2882,19 +2938,23 @@ class KTFigure:
     # Center-view helper
     # -----------------------------------------------------------------------
     def _center_view(self):
-        """Scroll the canvas so the artboard is centered in the viewport."""
+        """Scroll the canvas so the active artboard is centered in the viewport."""
         self._cv.update_idletasks()
-        cw = self._cv.winfo_width()
-        ch = self._cv.winfo_height()
+        # Use xview/yview to get the current visible fraction of the scrollregion.
+        # This is more reliable than winfo_width/height() in all layout contexts.
+        x0, x1 = self._cv.xview()
+        y0, y1 = self._cv.yview()
+        visible_w_frac = x1 - x0   # fraction of total canvas that is visible
+        visible_h_frac = y1 - y0
         z = self._zoom
-        total_w = (A4_W + 2 * BOARD_PAD) * z
-        total_h = (A4_H + 2 * BOARD_PAD) * z
-        # Artboard center in canvas coordinates
-        artboard_cx = (BOARD_PAD + A4_W / 2) * z
+        total_w = self._canvas_total_width() * z
+        total_h = self._canvas_total_height() * z
+        # Active artboard center in canvas coordinates
+        artboard_cx = (self._board_x_origin(self._active_board) + A4_W / 2) * z
         artboard_cy = (BOARD_PAD + A4_H / 2) * z
-        # Fraction of scroll region to show at top-left of viewport
-        xfrac = max(0.0, min(1.0, (artboard_cx - cw / 2) / total_w))
-        yfrac = max(0.0, min(1.0, (artboard_cy - ch / 2) / total_h))
+        # Fraction of scrollregion to place at the LEFT/TOP edge of the viewport
+        xfrac = max(0.0, min(1.0, artboard_cx / total_w - visible_w_frac / 2))
+        yfrac = max(0.0, min(1.0, artboard_cy / total_h - visible_h_frac / 2))
         self._cv.xview_moveto(xfrac)
         self._cv.yview_moveto(yfrac)
         self._set_status("View centered on artboard.")
@@ -2956,12 +3016,14 @@ class KTFigure:
         self._texts = ab["texts"]
         self._undo_stack = ab["undo_stack"]
         self._redo_stack = ab["redo_stack"]
-        # Redraw
-        self._cv.delete("all")
+        # All boards stay on-screen; just refresh the artboard borders and grid.
+        self._cv.delete("bg")
+        self._cv.delete("artboard")
+        self._cv.delete("ruler")
         self._draw_artboard()
+        self._clear_grid()
         if self._show_grid:
             self._draw_grid()
-        self._redraw_all()
         self._aes.clear()
         self._aes.clear_shape_properties()
         self._rebuild_artboard_buttons()
@@ -2986,9 +3048,13 @@ class KTFigure:
         self._undo_stack = new_ab["undo_stack"]
         self._redo_stack = new_ab["redo_stack"]
         self._clear_artboard_selection()
-        # Redraw blank artboard
-        self._cv.delete("all")
+        # Expand the scroll region and redraw all artboard backgrounds.
+        self._update_scrollregion()
+        self._cv.delete("bg")
+        self._cv.delete("artboard")
+        self._cv.delete("ruler")
         self._draw_artboard()
+        self._clear_grid()
         if self._show_grid:
             self._draw_grid()
         self._aes.clear()
@@ -3012,7 +3078,8 @@ class KTFigure:
         self._undo_stack = ab["undo_stack"]
         self._redo_stack = ab["redo_stack"]
         self._clear_artboard_selection()
-        # Redraw
+        # Full redraw: artboard positions shift when a board is deleted.
+        self._update_scrollregion()
         self._cv.delete("all")
         self._draw_artboard()
         if self._show_grid:
@@ -5557,40 +5624,52 @@ class KTFigure:
         self._set_status("Redo successful.")
 
     def _redraw_all(self):
-        """Redraw all blocks and shapes after undo/redo."""
-        # Clear canvas except background
+        """Redraw all artboards' objects after undo/redo or a full refresh."""
+        # Clear canvas items that are NOT part of the artboard backgrounds.
         for item in self._cv.find_all():
             tags = self._cv.gettags(item)
             if "bg" not in tags and "artboard" not in tags and "ruler" not in tags:
                 self._cv.delete(item)
 
-        # Reset IDs
-        for block in self._blocks:
-            block.rect_id = None
-            block.image_id = None
-            block.label_id = None
-            block._pil_img = None
+        # Draw each artboard's objects, temporarily making it the active board
+        # so that _to_canvas uses the correct x-offset for each board.
+        saved_active = self._active_board
+        for i, ab in enumerate(self._artboards):
+            self._active_board = i
+            blocks = ab["blocks"]
+            shapes = ab["shapes"]
+            texts = ab["texts"]
 
-        for shape in self._shapes:
-            shape.item_id = None
+            # Reset canvas IDs (they will be reassigned when redrawn)
+            for block in blocks:
+                block.rect_id = None
+                block.image_id = None
+                block.label_id = None
+                block._pil_img = None
+            for shape in shapes:
+                shape.item_id = None
+            for text in texts:
+                text.item_id = None
 
-        for text in self._texts:
-            text.item_id = None
+            # Redraw
+            for block in blocks:
+                if block.df is not None:
+                    self._render_block(block)
+                else:
+                    self._draw_empty_block(block)
+            for shape in shapes:
+                self._draw_shape(shape)
+            for text in texts:
+                self._draw_text(text)
 
-        # Redraw blocks
-        for block in self._blocks:
-            if block.df is not None:
-                self._render_block(block)
-            else:
-                self._draw_empty_block(block)
+        # Restore the saved active board
+        self._active_board = saved_active
+        self._blocks = self._artboards[saved_active]["blocks"]
+        self._shapes = self._artboards[saved_active]["shapes"]
+        self._texts = self._artboards[saved_active]["texts"]
 
-        # Redraw shapes
-        for shape in self._shapes:
-            self._draw_shape(shape)
-
-        # Redraw texts
-        for text in self._texts:
-            self._draw_text(text)
+        if self._show_grid:
+            self._draw_grid()
 
     # -----------------------------------------------------------------------
     # Copy/Paste System
