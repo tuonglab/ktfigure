@@ -2514,6 +2514,18 @@ class KTFigure:
         # Enable mouse wheel scrolling
         bind_mousewheel(self._cv, self._cv, "both")
 
+        # Ctrl+scroll (touchpad pinch-to-zoom) → zoom in/out
+        def _on_ctrl_scroll(event):
+            if event.num == 4 or event.delta > 0:
+                self._zoom_in()
+            else:
+                self._zoom_out()
+            return "break"
+
+        self._cv.bind("<Control-MouseWheel>", _on_ctrl_scroll)   # Windows/macOS
+        self._cv.bind("<Control-Button-4>", _on_ctrl_scroll)     # Linux scroll up
+        self._cv.bind("<Control-Button-5>", _on_ctrl_scroll)     # Linux scroll down
+
         self._cv.configure(
             scrollregion=(
                 0, 0,
