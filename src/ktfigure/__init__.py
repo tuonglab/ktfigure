@@ -2273,6 +2273,9 @@ class KTFigure:
         self._snap_to_grid: bool = True  # snap is on by default
         self._show_grid: bool = False  # grid lines hidden by default
 
+        # Zoom state
+        self._zoom: float = 1.0  # 1.0 = 100%
+
         # Clipboard
         self._clipboard = None
 
@@ -2494,7 +2497,11 @@ class KTFigure:
         bind_mousewheel(self._cv, self._cv, "both")
 
         self._cv.configure(
-            scrollregion=(0, 0, A4_W + 2 * BOARD_PAD, A4_H + 2 * BOARD_PAD)
+            scrollregion=(
+                0, 0,
+                (A4_W + 2 * BOARD_PAD) * self._zoom,
+                (A4_H + 2 * BOARD_PAD) * self._zoom,
+            )
         )
 
         self._cv.bind("<Button-1>", self._mouse_down)
@@ -2522,11 +2529,72 @@ class KTFigure:
         self.root.bind("<Delete>", lambda e: self._delete_key())
         self.root.bind("<BackSpace>", lambda e: self._delete_key())
 
-        # status bar
+        # status bar (separator + frame containing zoom controls + status label)
         self._status_sep = tk.Frame(self.root, bg=TC["sep"], height=1)
         self._status_sep.pack(side="bottom", fill="x")
+
+        self._status_bar = tk.Frame(self.root, bg=TC["tb"])
+        self._status_bar.pack(side="bottom", fill="x")
+
+        # ── zoom control (bottom-left) ──────────────────────────────────────
+        zoom_frame = tk.Frame(self._status_bar, bg=TC["tb"])
+        zoom_frame.pack(side="left", padx=(8, 4), pady=2)
+
+        self._btn_zoom_out = tk.Button(
+            zoom_frame,
+            text="−",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._zoom_out,
+            cursor="arrow",
+        )
+        self._btn_zoom_out.pack(side="left")
+
+        self._zoom_var = tk.StringVar(value="100")
+        self._zoom_entry = tk.Entry(
+            zoom_frame,
+            textvariable=self._zoom_var,
+            width=4,
+            bd=1,
+            relief="flat",
+            font=("", 9),
+            justify="center",
+        )
+        self._zoom_entry.pack(side="left", padx=2)
+        self._zoom_entry.bind("<Return>", lambda _e: self._apply_zoom_entry())
+        self._zoom_entry.bind("<FocusOut>", lambda _e: self._apply_zoom_entry())
+
+        tk.Label(
+            zoom_frame,
+            text="%",
+            bg=TC["tb"],
+            fg=TC["btn_fg"],
+            font=("", 9),
+        ).pack(side="left")
+
+        self._btn_zoom_in = tk.Button(
+            zoom_frame,
+            text="+",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._zoom_in,
+            cursor="arrow",
+        )
+        self._btn_zoom_in.pack(side="left")
+
+        # ── status label (fills remaining space on the right) ───────────────
         self._status = tk.Label(
-            self.root,
+            self._status_bar,
             text="Ready — drag on the white A4 board to draw a plot region.",
             bd=0,
             relief="flat",
@@ -2537,7 +2605,7 @@ class KTFigure:
             pady=4,
             font=("", 9),
         )
-        self._status.pack(side="bottom", fill="x")
+        self._status.pack(side="left", fill="x", expand=True)
 
         # Store all themeable widget refs for _apply_theme()
         self._theme_widgets = {
@@ -2551,13 +2619,15 @@ class KTFigure:
         self._apply_theme()
 
     def _draw_artboard(self):
-        ox, oy = BOARD_PAD, BOARD_PAD
+        z = self._zoom
+        ox, oy = BOARD_PAD * z, BOARD_PAD * z
+        w, h = A4_W * z, A4_H * z
         # drop shadow
         self._cv.create_rectangle(
             ox + 5,
             oy + 5,
-            ox + A4_W + 5,
-            oy + A4_H + 5,
+            ox + w + 5,
+            oy + h + 5,
             fill="#222",
             outline="",
             tags="bg",
@@ -2566,8 +2636,8 @@ class KTFigure:
         self._cv.create_rectangle(
             ox,
             oy,
-            ox + A4_W,
-            oy + A4_H,
+            ox + w,
+            oy + h,
             fill="white",
             outline="#bbb",
             width=1,
@@ -2575,20 +2645,26 @@ class KTFigure:
         )
         # subtle rulers
         for x in range(0, A4_W + 1, 100):
-            self._cv.create_line(ox + x, oy, ox + x, oy + 8, fill="#ccc", tags="ruler")
+            self._cv.create_line(
+                ox + x * z, oy, ox + x * z, oy + 8 * z, fill="#ccc", tags="ruler"
+            )
         for y in range(0, A4_H + 1, 100):
-            self._cv.create_line(ox, oy + y, ox + 8, oy + y, fill="#ccc", tags="ruler")
+            self._cv.create_line(
+                ox, oy + y * z, ox + 8 * z, oy + y * z, fill="#ccc", tags="ruler"
+            )
 
     # -----------------------------------------------------------------------
     # Coordinate helpers
     # -----------------------------------------------------------------------
     def _to_board(self, cx, cy):
-        bx = cx - BOARD_PAD
-        by = cy - BOARD_PAD
+        z = self._zoom
+        bx = cx / z - BOARD_PAD
+        by = cy / z - BOARD_PAD
         return max(0, min(bx, A4_W)), max(0, min(by, A4_H))
 
     def _to_canvas(self, bx, by):
-        return bx + BOARD_PAD, by + BOARD_PAD
+        z = self._zoom
+        return (bx + BOARD_PAD) * z, (by + BOARD_PAD) * z
 
     def _ev_board(self, event):
         return self._to_board(self._cv.canvasx(event.x), self._cv.canvasy(event.y))
@@ -2612,25 +2688,26 @@ class KTFigure:
         The artboard is always rendered on a white background regardless of
         the UI theme, so a fixed light-grey colour is appropriate here.
         """
-        ox, oy = BOARD_PAD, BOARD_PAD
+        z = self._zoom
+        ox, oy = BOARD_PAD * z, BOARD_PAD * z
         for x in range(0, A4_W + 1, GRID_SIZE):
             self._cv.create_line(
-                ox + x,
+                ox + x * z,
                 oy,
-                ox + x,
-                oy + A4_H,
+                ox + x * z,
+                oy + A4_H * z,
                 fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
+                dash=(1, max(1, round(GRID_SIZE * z - 1))),
                 tags="grid",
             )
         for y in range(0, A4_H + 1, GRID_SIZE):
             self._cv.create_line(
                 ox,
-                oy + y,
-                ox + A4_W,
-                oy + y,
+                oy + y * z,
+                ox + A4_W * z,
+                oy + y * z,
                 fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
+                dash=(1, max(1, round(GRID_SIZE * z - 1))),
                 tags="grid",
             )
         # Place grid above the artboard (white sheet) but below blocks/shapes
@@ -2671,6 +2748,63 @@ class KTFigure:
             self._btn_snap._set_bg(TC["btn"])
             self._btn_snap._lbl.configure(fg=TC["btn_fg"])
             self._set_status("Snap to grid OFF.")
+
+    # -----------------------------------------------------------------------
+    # Zoom helpers
+    # -----------------------------------------------------------------------
+    _ZOOM_STEPS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
+
+    def _set_zoom(self, factor: float):
+        """Apply *factor* as the new zoom level and redraw everything."""
+        factor = max(0.1, min(10.0, factor))
+        self._zoom = factor
+        pct = round(factor * 100)
+        self._zoom_var.set(str(pct))
+        # Update scrollregion
+        self._cv.configure(
+            scrollregion=(
+                0, 0,
+                (A4_W + 2 * BOARD_PAD) * self._zoom,
+                (A4_H + 2 * BOARD_PAD) * self._zoom,
+            )
+        )
+        # Full redraw with new zoom
+        self._cv.delete("all")
+        self._draw_artboard()
+        if self._show_grid:
+            self._draw_grid()
+        self._redraw_all()
+
+    def _zoom_in(self):
+        """Step zoom up to the next preset level."""
+        steps = self._ZOOM_STEPS
+        for s in steps:
+            if s > self._zoom + 0.01:
+                self._set_zoom(s)
+                return
+        self._set_zoom(steps[-1])
+
+    def _zoom_out(self):
+        """Step zoom down to the previous preset level."""
+        steps = self._ZOOM_STEPS
+        for s in reversed(steps):
+            if s < self._zoom - 0.01:
+                self._set_zoom(s)
+                return
+        self._set_zoom(steps[0])
+
+    def _apply_zoom_entry(self):
+        """Read the zoom entry box and apply; silently ignore empty/invalid values."""
+        try:
+            pct = float(self._zoom_var.get())
+        except ValueError:
+            # Restore the current zoom display without crashing
+            self._zoom_var.set(str(round(self._zoom * 100)))
+            return
+        if pct <= 0:
+            self._zoom_var.set(str(round(self._zoom * 100)))
+            return
+        self._set_zoom(pct / 100.0)
 
     def _block_at(self, bx, by, pad=0):
         for b in reversed(self._blocks):
@@ -3267,6 +3401,16 @@ class KTFigure:
         # Status bar
         self._status.configure(bg=TC["tb"], fg=TC["status_fg"])
         self._status_sep.configure(bg=TC["sep"])
+        self._status_bar.configure(bg=TC["tb"])
+
+        # Zoom controls
+        self._btn_zoom_in.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        self._btn_zoom_out.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        self._zoom_entry.master.configure(bg=TC["tb"])
 
         # Canvas outer frame and canvas itself
         self._canvas_outer.configure(bg=TC["canvas"])
