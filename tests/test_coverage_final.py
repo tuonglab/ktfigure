@@ -597,9 +597,8 @@ class TestAestheticsPanelMissingClosures:
         labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
         with patch("ktfigure.colorchooser.askcolor",
                    return_value=((255, 0, 0), "#ff0000")):
-            for lbl in labels:
-                _click_label_visible(self.root, lbl)
-                break
+            if labels:
+                _click_label_visible(self.root, labels[0])
 
     # ---- fill color swatch --------------------------------------------------
 
@@ -612,9 +611,8 @@ class TestAestheticsPanelMissingClosures:
         labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
         with patch("ktfigure.colorchooser.askcolor",
                    return_value=((0, 255, 0), "#00ff00")):
-            for lbl in labels[1:]:  # second swatch is fill
-                _click_label_visible(self.root, lbl)
-                break
+            if len(labels) >= 2:  # second swatch is fill
+                _click_label_visible(self.root, labels[1])
 
     # ---- text color swatch --------------------------------------------------
 
@@ -626,9 +624,8 @@ class TestAestheticsPanelMissingClosures:
         labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
         with patch("ktfigure.colorchooser.askcolor",
                    return_value=((0, 0, 255), "#0000ff")):
-            for lbl in labels:
-                _click_label_visible(self.root, lbl)
-                break
+            if labels:
+                _click_label_visible(self.root, labels[0])
 
     # ---- italic checkbox change (on_italic_change) --------------------------
 
@@ -721,9 +718,8 @@ class TestAestheticsPanelMissingClosures:
         hand2_labels = _find_labels_by_cursor(self.panel._hue_color_frame, "hand2")
         with patch("ktfigure.colorchooser.askcolor",
                    return_value=((200, 100, 50), "#c86432")):
-            for lbl in hand2_labels:
-                _click_label_visible(self.root, lbl)
-                break
+            if hand2_labels:
+                _click_label_visible(self.root, hand2_labels[0])
 
     # ---- _reset_hue_colors when _block is None ------------------------------
 
@@ -779,6 +775,9 @@ class TestAestheticsPanelMissingClosures:
         """load_block's except-branch fires when var.set raises with bad type."""
         b = PlotBlock(0, 0, DPI * 2, DPI * 2)
         # DoubleVar.set("bad") will raise a TclError, exercising the except pass
+        # "not-a-float" is stored in aesthetics under "line_width" (a DoubleVar key).
+        # When load_block calls var.set("not-a-float"), tkinter's DoubleVar raises
+        # TclError (can't validate non-numeric string), exercising the except clause.
         b.aesthetics["line_width"] = "not-a-float"
         self.panel.load_block(b)
         pump(self.root)  # should not raise
@@ -797,7 +796,7 @@ class TestAestheticsPanelMissingClosures:
         b = PlotBlock(0, 0, DPI * 2, DPI * 2)
         b.df = pd.DataFrame({"x": [1.0, 2.0], "cat": ["a", "b"]})
         b.col_hue = "cat"
-        b.aesthetics["palette"] = "invalid_palette_xyz_not_real"
+        b.aesthetics["palette"] = "invalid_palette"
         self.panel.load_block(b)
         pump(self.root)  # should not raise
 
@@ -886,6 +885,7 @@ class TestAestheticsPanelMissingClosures:
         """Patch a var.set to raise, covering the except-pass in load_block."""
         b = PlotBlock(0, 0, DPI * 2, DPI * 2)
         if self.panel._vars:
+            # Any var suffices; we just need var.set() to raise to hit the except clause.
             first_key = next(iter(self.panel._vars))
             original_var = self.panel._vars[first_key]
             with patch.object(original_var, "set", side_effect=tk.TclError("err")):
