@@ -994,6 +994,7 @@ class AestheticsPanel(ttk.Frame):
 
         # scrollable body – vertical + horizontal
         canvas = tk.Canvas(self._body, highlightthickness=0)
+        self._canvas = canvas
         vsb = ttk.Scrollbar(self._body, orient="vertical", command=canvas.yview)
         hsb = ttk.Scrollbar(self._body, orient="horizontal", command=canvas.xview)
         self._inner = ttk.Frame(canvas)
@@ -1252,9 +1253,20 @@ class AestheticsPanel(ttk.Frame):
         ).pack(anchor="w")
         self._hue_color_map: dict = {}  # {str(value): hex_color}
 
+        # Ensure mousewheel scrolls the canvas even when hovering over child widgets
+        self._bind_scroll_recursive(self._inner)
+
         self._bind_auto_apply()
 
     # ---- auto-apply wiring ----------------------------------------------
+    def _bind_scroll_recursive(self, widget):
+        """Bind mousewheel events to *widget* and all its descendants so the
+        Aesthetics panel scrolls regardless of which child widget the pointer
+        is hovering over."""
+        bind_mousewheel(widget, self._canvas, "both")
+        for child in widget.winfo_children():
+            self._bind_scroll_recursive(child)
+
     def _bind_auto_apply(self):
         def on_change(*_):
             if not self._loading:
@@ -1715,11 +1727,13 @@ class AestheticsPanel(ttk.Frame):
             rf = ttk.Frame(self._hue_color_frame)
             rf.pack(fill="x", pady=1)
             ttk.Label(rf, text=k, width=14, anchor="w").pack(side="left")
-            swatch = tk.Label(rf, bg=hex_c, width=3, relief="solid", borderwidth=1)
+            swatch = tk.Label(
+                rf, bg=hex_c, width=3, relief="solid", borderwidth=1, cursor="hand2"
+            )
             swatch.pack(side="left", padx=4)
 
             def make_picker(v=k, sw=swatch):
-                def pick():
+                def pick(*_):
                     res = colorchooser.askcolor(
                         color=self._hue_color_map.get(v, "#4C72B0"),
                         title=f'Colour for "{v}"',
@@ -1732,7 +1746,10 @@ class AestheticsPanel(ttk.Frame):
 
                 return pick
 
-            ttk.Button(rf, text="Pick…", command=make_picker()).pack(side="left")
+            swatch.bind("<Button-1>", make_picker())
+
+        # Re-bind scroll events so newly created rows also scroll the panel
+        self._bind_scroll_recursive(self._hue_color_frame)
 
     def _reset_hue_colors(self):
         self._hue_color_map = {}
@@ -1964,7 +1981,18 @@ class PlotRenderer:
         # Build palette: custom hue mapping > named palette > None (when color override)
         hue_pal = a.get("hue_palette", {})
         if a["use_color"]:
-            palette = None
+            if hue is not None and df is not None:
+                # When hue is active, seaborn ignores `color` and uses a palette
+                # per group. Build a dict mapping every hue value to the chosen
+                # colour so the single-colour override is honoured.
+                try:
+                    hue_values = df[hue].dropna().unique()
+                    palette = {val: color for val in hue_values}
+                    color = None
+                except Exception:
+                    palette = None
+            else:
+                palette = None
         elif hue_pal and hue:
             # Convert string keys back to original types to match dataframe values
             palette = {}

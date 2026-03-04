@@ -210,6 +210,20 @@ class TestPlotRendererAesthetics:
                        aesthetics_overrides={"hue_palette": {"A": "#ff0000", "B": "#0000ff"}})
         assert_figure(PlotRenderer.render(b))
 
+    @pytest.mark.parametrize("plot_type,col_x,col_y", [
+        ("scatter", "x", "y"),
+        ("line", "x", "y"),
+        ("bar", "category", "y"),
+        ("box", "category", "y"),
+        ("strip", "category", "y"),
+    ])
+    def test_use_color_with_hue(self, df, plot_type, col_x, col_y):
+        """use_color=True must apply the chosen colour even when hue is set."""
+        b = make_block(df, plot_type, col_x, col_y, col_hue="category",
+                       aesthetics_overrides={"use_color": True, "color": "#ff0000"})
+        fig = PlotRenderer.render(b)
+        assert_figure(fig)
+
     def test_line_style_dashed(self, df):
         b = make_block(df, "line", "x", "y",
                        aesthetics_overrides={"line_style": "--", "line_width": 2.0})
