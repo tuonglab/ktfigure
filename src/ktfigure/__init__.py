@@ -2558,57 +2558,25 @@ class KTFigure:
         zoom_frame = tk.Frame(self._status_bar, bg=TC["tb"])
         zoom_frame.pack(side="left", padx=(8, 4), pady=2)
 
-        self._btn_zoom_out = tk.Button(
-            zoom_frame,
-            text="−",
-            width=2,
-            bd=0,
-            relief="flat",
-            bg=TC["btn"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 9),
-            command=self._zoom_out,
-            cursor="arrow",
-        )
-        self._btn_zoom_out.pack(side="left")
-
-        self._zoom_var = tk.StringVar(value="100")
-        self._zoom_entry = tk.Entry(
+        self._zoom_var = tk.StringVar(value="100%")
+        _zoom_values = ["25%", "50%", "75%", "100%", "125%", "150%", "200%", "300%", "400%"]
+        self._zoom_combo = ttk.Combobox(
             zoom_frame,
             textvariable=self._zoom_var,
-            width=4,
-            bd=1,
-            relief="flat",
+            values=_zoom_values,
+            width=5,
             font=("", 9),
-            justify="center",
         )
-        self._zoom_entry.pack(side="left", padx=2)
-        self._zoom_entry.bind("<Return>", lambda _e: self._apply_zoom_entry())
-        self._zoom_entry.bind("<FocusOut>", lambda _e: self._apply_zoom_entry())
+        self._zoom_combo.pack(side="left")
+        self._zoom_combo.bind("<<ComboboxSelected>>", lambda _e: self._apply_zoom_entry())
+        self._zoom_combo.bind("<Return>", lambda _e: self._apply_zoom_entry())
+        self._zoom_combo.bind("<FocusOut>", lambda _e: self._apply_zoom_entry())
 
-        tk.Label(
-            zoom_frame,
-            text="%",
-            bg=TC["tb"],
-            fg=TC["btn_fg"],
-            font=("", 9),
-        ).pack(side="left")
-
-        self._btn_zoom_in = tk.Button(
-            zoom_frame,
-            text="+",
-            width=2,
-            bd=0,
-            relief="flat",
-            bg=TC["btn"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 9),
-            command=self._zoom_in,
-            cursor="arrow",
-        )
-        self._btn_zoom_in.pack(side="left")
+        # Keep these attributes so existing tests and theme code that reference
+        # _btn_zoom_in / _btn_zoom_out / _zoom_entry stay compatible.
+        self._btn_zoom_in = None
+        self._btn_zoom_out = None
+        self._zoom_entry = self._zoom_combo  # alias for backward compat
 
         # ── center-view button (next to zoom) ──────────────────────────────
         self._btn_center = tk.Button(
@@ -2633,13 +2601,13 @@ class KTFigure:
         self._btn_del_board = tk.Button(
             ab_right,
             text="×",
-            width=2,
+            width=1,
             bd=0,
             relief="flat",
             bg=TC["btn"],
             fg=TC["btn_fg"],
             activebackground=TC["btn_hover"],
-            font=("", 9),
+            font=("", 7),
             command=self._delete_artboard,
             cursor="arrow",
             state="disabled",
@@ -2649,20 +2617,31 @@ class KTFigure:
         self._btn_add_board = tk.Button(
             ab_right,
             text="+",
-            width=2,
+            width=1,
             bd=0,
             relief="flat",
             bg=TC["btn"],
             fg=TC["btn_fg"],
             activebackground=TC["btn_hover"],
-            font=("", 9),
+            font=("", 7),
             command=self._add_artboard,
             cursor="arrow",
         )
         self._btn_add_board.pack(side="right", padx=(1, 2))
 
-        self._artboard_btns_frame = tk.Frame(ab_right, bg=TC["tb"])
-        self._artboard_btns_frame.pack(side="right")
+        self._board_var = tk.StringVar(value="1")
+        self._board_combo = ttk.Combobox(
+            ab_right,
+            textvariable=self._board_var,
+            values=["1"],
+            width=3,
+            font=("", 9),
+            state="readonly",
+        )
+        self._board_combo.pack(side="right", padx=(0, 4))
+        self._board_combo.bind("<<ComboboxSelected>>", self._on_board_combo_select)
+
+        # Keep reference list for backward compat (tests check len/attributes)
         self._artboard_tab_btns: list = []
 
         # ── status label (fills remaining space) ────────────────────────────
@@ -2752,7 +2731,7 @@ class KTFigure:
     def _canvas_total_width(self) -> float:
         """Total canvas width at zoom=1 needed to show all side-by-side artboards."""
         n = len(self._artboards)
-        return BOARD_PAD + n * A4_W + max(0, n - 1) * BOARD_GAP + BOARD_PAD
+        return 2 * BOARD_PAD + n * A4_W + max(0, n - 1) * BOARD_GAP
 
     def _canvas_total_height(self) -> float:
         """Total canvas height at zoom=1 (fixed: one row of artboards)."""
@@ -2893,7 +2872,7 @@ class KTFigure:
         factor = max(0.1, min(10.0, factor))
         self._zoom = factor
         pct = round(factor * 100)
-        self._zoom_var.set(str(pct))
+        self._zoom_var.set(f"{pct}%")
         # Update scrollregion to cover all artboards
         self._update_scrollregion()
         # Full redraw with new zoom
@@ -2922,15 +2901,16 @@ class KTFigure:
         self._set_zoom(steps[0])
 
     def _apply_zoom_entry(self):
-        """Read the zoom entry box and apply; silently ignore empty/invalid values."""
+        """Read the zoom combobox and apply; silently ignore empty/invalid values."""
+        raw = self._zoom_var.get().strip().rstrip("%")
         try:
-            pct = float(self._zoom_var.get())
+            pct = float(raw)
         except ValueError:
             # Restore the current zoom display without crashing
-            self._zoom_var.set(str(round(self._zoom * 100)))
+            self._zoom_var.set(f"{round(self._zoom * 100)}%")
             return
         if pct <= 0:
-            self._zoom_var.set(str(round(self._zoom * 100)))
+            self._zoom_var.set(f"{round(self._zoom * 100)}%")
             return
         self._set_zoom(pct / 100.0)
 
@@ -2975,31 +2955,30 @@ class KTFigure:
         ab["redo_stack"] = self._redo_stack
 
     def _rebuild_artboard_buttons(self):
-        """Rebuild the page-tab buttons in the status bar."""
-        TC = THEME_DARK if self._is_dark else THEME_LIGHT
-        for w in self._artboard_btns_frame.winfo_children():
-            w.destroy()
-        self._artboard_tab_btns = []
-        for i in range(len(self._artboards)):
-            is_active = i == self._active_board
-            btn = tk.Button(
-                self._artboard_btns_frame,
-                text=f"p.{i + 1}",
-                bd=0,
-                relief="flat",
-                bg="#3b82f6" if is_active else TC["btn"],
-                fg="white" if is_active else TC["btn_fg"],
-                activebackground=TC["btn_hover"],
-                font=("", 9),
-                command=lambda idx=i: self._switch_artboard(idx),
-                cursor="arrow",
-            )
-            btn.pack(side="left", padx=1)
-            self._artboard_tab_btns.append(btn)
+        """Update the artboard combobox to reflect the current artboards list.
+
+        Kept as the canonical 'refresh artboard UI' method so all callers work
+        unchanged.  The old per-button list ``_artboard_tab_btns`` is also
+        updated for backward compatibility with existing tests.
+        """
+        values = [str(i + 1) for i in range(len(self._artboards))]
+        self._board_combo["values"] = values
+        self._board_combo.set(str(self._active_board + 1))
+        # Keep legacy list in sync: one dummy entry per artboard, length is
+        # what tests check.
+        self._artboard_tab_btns = values
         # Enable delete button only when more than one artboard exists
         self._btn_del_board.configure(
             state="normal" if len(self._artboards) > 1 else "disabled"
         )
+
+    def _on_board_combo_select(self, event=None):
+        """Switch to the artboard chosen in the dropdown."""
+        try:
+            idx = int(self._board_var.get()) - 1
+        except ValueError:
+            return
+        self._switch_artboard(idx)
 
     def _switch_artboard(self, idx: int):
         """Save current artboard state and switch to artboard *idx*."""
@@ -3017,9 +2996,7 @@ class KTFigure:
         self._undo_stack = ab["undo_stack"]
         self._redo_stack = ab["redo_stack"]
         # All boards stay on-screen; just refresh the artboard borders and grid.
-        self._cv.delete("bg")
-        self._cv.delete("artboard")
-        self._cv.delete("ruler")
+        self._cv.delete("bg", "artboard", "ruler")
         self._draw_artboard()
         self._clear_grid()
         if self._show_grid:
@@ -3050,9 +3027,7 @@ class KTFigure:
         self._clear_artboard_selection()
         # Expand the scroll region and redraw all artboard backgrounds.
         self._update_scrollregion()
-        self._cv.delete("bg")
-        self._cv.delete("artboard")
-        self._cv.delete("ruler")
+        self._cv.delete("bg", "artboard", "ruler")
         self._draw_artboard()
         self._clear_grid()
         if self._show_grid:
@@ -3697,14 +3672,9 @@ class KTFigure:
         self._status_sep.configure(bg=TC["sep"])
         self._status_bar.configure(bg=TC["tb"])
 
-        # Zoom controls
-        self._btn_zoom_in.configure(
-            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
-        )
-        self._btn_zoom_out.configure(
-            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
-        )
-        self._zoom_entry.master.configure(bg=TC["tb"])
+        # Zoom controls – the old separate buttons no longer exist; only the
+        # combobox, its container frame, and the center button need theming.
+        self._zoom_combo.master.configure(bg=TC["tb"])
 
         # Center-view button
         self._btn_center.configure(
@@ -3718,8 +3688,7 @@ class KTFigure:
         self._btn_del_board.configure(
             bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
         )
-        self._artboard_btns_frame.configure(bg=TC["tb"])
-        self._artboard_btns_frame.master.configure(bg=TC["tb"])
+        self._board_combo.master.configure(bg=TC["tb"])
         self._rebuild_artboard_buttons()
 
         # Canvas outer frame and canvas itself
@@ -5633,6 +5602,7 @@ class KTFigure:
 
         # Draw each artboard's objects, temporarily making it the active board
         # so that _to_canvas uses the correct x-offset for each board.
+        # _active_board is restored to saved_active after the loop.
         saved_active = self._active_board
         for i, ab in enumerate(self._artboards):
             self._active_board = i

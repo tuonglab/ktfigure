@@ -85,8 +85,11 @@ class TestArtboardDefaults:
     def test_active_board_is_zero(self):
         assert self.app._active_board == 0
 
-    def test_artboard_btns_frame_exists(self):
-        assert self.app._artboard_btns_frame is not None
+    def test_board_combo_exists(self):
+        assert self.app._board_combo is not None
+
+    def test_board_combo_default_value(self):
+        assert self.app._board_var.get() == "1"
 
     def test_add_board_button_exists(self):
         assert self.app._btn_add_board is not None
@@ -102,7 +105,8 @@ class TestArtboardDefaults:
         assert len(self.app._artboard_tab_btns) == 1
 
     def test_first_tab_button_labeled_p1(self):
-        assert self.app._artboard_tab_btns[0].cget("text") == "p.1"
+        # _artboard_tab_btns now holds string values ("1", "2", ...)
+        assert self.app._artboard_tab_btns[0] == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -264,8 +268,8 @@ class TestSwitchArtboard:
         app._switch_artboard(0)
         pump(self.root)
         assert app._active_board == 0
-        # Active button should be p.1
-        assert app._artboard_tab_btns[0].cget("bg") == "#3b82f6"
+        # Combobox should now show page 1
+        assert app._board_var.get() == "1"
 
     def test_switch_sets_status(self):
         app = self.app

@@ -47,13 +47,18 @@ class TestZoomDefaults:
         assert self.app._zoom == 1.0
 
     def test_zoom_entry_default_is_100(self):
-        assert self.app._zoom_var.get() == "100"
+        assert self.app._zoom_var.get() == "100%"
 
     def test_zoom_buttons_exist(self):
-        assert self.app._btn_zoom_in is not None
-        assert self.app._btn_zoom_out is not None
+        # The old separate buttons are gone; alias attributes remain for compat
+        assert self.app._btn_zoom_in is None
+        assert self.app._btn_zoom_out is None
+
+    def test_zoom_combo_exists(self):
+        assert self.app._zoom_combo is not None
 
     def test_zoom_entry_exists(self):
+        # _zoom_entry is an alias for _zoom_combo
         assert self.app._zoom_entry is not None
 
 
@@ -136,7 +141,7 @@ class TestSetZoom:
 
     def test_set_zoom_updates_entry(self):
         self.app._set_zoom(1.5)
-        assert self.app._zoom_var.get() == "150"
+        assert self.app._zoom_var.get() == "150%"
 
     def test_set_zoom_clamps_min(self):
         self.app._set_zoom(0.0)
@@ -241,6 +246,12 @@ class TestApplyZoomEntry:
 
     def test_valid_entry_applies_zoom(self):
         app = self.app
+        app._zoom_var.set("150%")
+        app._apply_zoom_entry()
+        assert abs(app._zoom - 1.5) < 1e-9
+
+    def test_valid_entry_no_percent_applies_zoom(self):
+        app = self.app
         app._zoom_var.set("150")
         app._apply_zoom_entry()
         assert abs(app._zoom - 1.5) < 1e-9
@@ -251,7 +262,7 @@ class TestApplyZoomEntry:
         app._apply_zoom_entry()  # must not raise
         # Zoom unchanged; entry restored
         assert app._zoom == 1.0
-        assert app._zoom_var.get() == "100"
+        assert app._zoom_var.get() == "100%"
 
     def test_non_numeric_entry_does_not_crash(self):
         app = self.app
@@ -291,9 +302,8 @@ class TestZoomTheme:
         app = self.app
         app._on_theme_click()
         pump(self.root)
-        assert app._btn_zoom_in is not None
-        assert app._btn_zoom_out is not None
-        assert app._zoom_entry is not None
+        assert app._zoom_combo is not None
+        assert app._zoom_entry is not None  # alias
 
     def test_zoom_preserved_after_theme_switch(self):
         app = self.app
