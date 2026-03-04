@@ -2551,22 +2551,39 @@ class KTFigure:
         # try/except handles macOS builds whose Tk was compiled without
         # gesture support (e.g. XQuartz-backed conda/miniforge packages)
         # where bind("<Magnify>") raises TclError and would crash startup.
+        #
+        # Tkinter's event.delta is set via getint_event(), which calls int()
+        # on Tk's %d substitution string.  For <Magnify>, Tk reports float
+        # values such as "0.032"; int("0.032") raises ValueError so
+        # getint_event() silently returns 0 — meaning event.delta is always 0
+        # and the accumulator never crosses the threshold.  To work around
+        # this we register a raw Tcl command that receives %d as a plain
+        # string and parse it ourselves with float().
         if sys.platform == "darwin":
             _magnify_accum = 0.0
 
-            def _on_magnify(event):
+            def _on_magnify(delta_str):
                 nonlocal _magnify_accum
-                _magnify_accum += event.delta
+                try:
+                    delta = float(delta_str)
+                except (ValueError, TypeError):
+                    return
+                _magnify_accum += delta
                 if _magnify_accum >= 0.1:
                     _magnify_accum = 0.0
                     self._zoom_in()
                 elif _magnify_accum <= -0.1:
                     _magnify_accum = 0.0
                     self._zoom_out()
-                return "break"
+
+            # Keep a reference so tests can invoke the handler directly.
+            self._on_magnify = _on_magnify
 
             try:
-                self._cv.bind("<Magnify>", _on_magnify)
+                _magnify_cb = self._cv.register(_on_magnify)
+                self._cv.tk.call(
+                    "bind", self._cv._w, "<Magnify>", _magnify_cb + " %d"
+                )
             except tk.TclError:
                 pass  # Tk build on this macOS installation doesn't support <Magnify>
 

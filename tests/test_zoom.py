@@ -3,6 +3,7 @@ Tests for the canvas zoom feature.
 
 These tests require a display (xvfb on Linux CI).
 """
+import sys
 import tkinter as tk
 import pytest
 
@@ -317,12 +318,6 @@ class TestZoomTheme:
 # macOS trackpad pinch-to-zoom (<Magnify> event)
 # ---------------------------------------------------------------------------
 
-class MockMagnifyEvent:
-    """Minimal synthetic <Magnify> event for macOS trackpad pinch tests."""
-    def __init__(self, delta):
-        self.delta = delta
-
-
 class TestMagnifyZoom:
     def setup_method(self):
         self.root, self.app = make_app()
@@ -333,25 +328,60 @@ class TestMagnifyZoom:
         except Exception:
             pass
 
-    def test_magnify_zoom_in_after_threshold(self):
-        """Accumulated positive Magnify delta ≥ 0.1 triggers zoom in."""
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_zoom_in_after_threshold(self):
+        """Accumulated float deltas ≥ 0.1 via the _on_magnify handler zoom in."""
         app = self.app
         before = app._zoom
-        app._zoom_in()
+        # Two typical macOS <Magnify> delta strings (float, not int)
+        app._on_magnify("0.06")
+        app._on_magnify("0.06")  # cumulative = 0.12 ≥ 0.1
         pump(self.root)
         assert app._zoom > before
 
-    def test_magnify_zoom_out_after_threshold(self):
-        """Accumulated negative Magnify delta ≤ -0.1 triggers zoom out."""
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_zoom_out_after_threshold(self):
+        """Accumulated float deltas ≤ -0.1 via the _on_magnify handler zoom out."""
         app = self.app
         app._set_zoom(1.25)  # step up so there's room to zoom out
         before = app._zoom
-        app._zoom_out()
+        app._on_magnify("-0.06")
+        app._on_magnify("-0.06")  # cumulative = -0.12 ≤ -0.1
         pump(self.root)
         assert app._zoom < before
 
     @pytest.mark.skipif(
-        __import__("sys").platform != "darwin",
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_below_threshold_no_zoom(self):
+        """A single small delta that doesn't reach the threshold must not zoom."""
+        app = self.app
+        before = app._zoom
+        app._on_magnify("0.03")  # below 0.1 threshold → no zoom yet
+        pump(self.root)
+        assert app._zoom == before
+
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_invalid_delta_no_crash(self):
+        """A non-numeric delta string must not crash."""
+        app = self.app
+        before = app._zoom
+        app._on_magnify("not_a_number")
+        pump(self.root)
+        assert app._zoom == before
+
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
         reason="<Magnify> event is macOS-only",
     )
     def test_magnify_binding_exists_on_macos(self):
