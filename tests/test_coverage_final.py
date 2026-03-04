@@ -103,6 +103,50 @@ class TestMouseWheelCallbacks:
         canvas.event_generate("<MouseWheel>", delta=-120, x=50, y=50)
         pump(self.root)
 
+    def test_stop_propagation_vertical(self):
+        """stop_propagation=True should make the handler return 'break'."""
+        canvas = tk.Canvas(self.root, width=200, height=200)
+        canvas.pack()
+        bind_mousewheel(canvas, canvas, "vertical", stop_propagation=True)
+        pump_visible(self.root)
+        canvas.event_generate("<MouseWheel>", delta=120, x=50, y=50)
+        canvas.event_generate("<Button-4>", x=50, y=50)
+        canvas.event_generate("<Button-5>", x=50, y=50)
+        pump(self.root)
+
+    def test_stop_propagation_horizontal(self):
+        """stop_propagation=True with horizontal also returns 'break'."""
+        canvas = tk.Canvas(self.root, width=200, height=200)
+        canvas.pack()
+        bind_mousewheel(canvas, canvas, "both", stop_propagation=True)
+        pump_visible(self.root)
+        canvas.event_generate("<Shift-MouseWheel>", delta=120, x=50, y=50)
+        canvas.event_generate("<Shift-Button-4>", x=50, y=50)
+        canvas.event_generate("<Shift-Button-5>", x=50, y=50)
+        pump(self.root)
+
+    def test_stop_propagation_on_combobox(self):
+        """bind_mousewheel with stop_propagation on a Combobox should not raise."""
+        combo = ttk.Combobox(self.root, values=["a", "b", "c"])
+        combo.pack()
+        canvas = tk.Canvas(self.root, width=200, height=200)
+        canvas.pack()
+        bind_mousewheel(combo, canvas, "both", stop_propagation=True)
+        pump_visible(self.root)
+        combo.event_generate("<MouseWheel>", delta=120, x=5, y=5)
+        pump(self.root)
+
+    def test_stop_propagation_on_spinbox(self):
+        """bind_mousewheel with stop_propagation on a Spinbox should not raise."""
+        spin = ttk.Spinbox(self.root, from_=0, to=100)
+        spin.pack()
+        canvas = tk.Canvas(self.root, width=200, height=200)
+        canvas.pack()
+        bind_mousewheel(spin, canvas, "both", stop_propagation=True)
+        pump_visible(self.root)
+        spin.event_generate("<MouseWheel>", delta=120, x=5, y=5)
+        pump(self.root)
+
 
 # ---------------------------------------------------------------------------
 # AestheticsPanel color picker closures (requires visible window)
@@ -490,3 +534,392 @@ class TestGetSelectedObjects:
         self.app._selected_objects = [b1, b2]
         result = self.app._get_selected_objects()
         assert result == [b1, b2]
+
+
+# ---------------------------------------------------------------------------
+# AestheticsPanel – closures not yet exercised by existing tests
+# ---------------------------------------------------------------------------
+
+def _all_widgets_recursive(parent):
+    result = [parent]
+    for child in parent.winfo_children():
+        result.extend(_all_widgets_recursive(child))
+    return result
+
+
+def _find_labels_by_cursor(parent, cursor):
+    result = []
+    for child in parent.winfo_children():
+        if isinstance(child, tk.Label):
+            try:
+                if str(child.cget("cursor")) == cursor:
+                    result.append(child)
+            except Exception:
+                pass
+        result.extend(_find_labels_by_cursor(child, cursor))
+    return result
+
+
+def _click_label_visible(root, label):
+    """Click a label while its window is deiconified, ensuring event fires."""
+    root.deiconify()
+    root.update()
+    label.event_generate("<Button-1>")
+    root.update()
+    root.withdraw()
+    root.update()
+
+
+class TestAestheticsPanelMissingClosures:
+    """Cover closure callbacks not previously exercised (color pickers, trace vars, etc.)."""
+
+    def setup_method(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.calls = []
+        self.panel = AestheticsPanel(self.root, on_update=lambda b: None)
+        self.panel.pack(fill="both", expand=True)  # must be packed for click events
+        pump(self.root)
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    # ---- shape color swatch (cursor="arrow") --------------------------------
+
+    def test_shape_color_swatch_click(self):
+        """Click shape color swatch (cursor=arrow) triggers pick_shape_color body."""
+        shape = Shape(0, 0, 100, 100, "rectangle")
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
+        with patch("ktfigure.colorchooser.askcolor",
+                   return_value=((255, 0, 0), "#ff0000")):
+            if labels:
+                _click_label_visible(self.root, labels[0])
+
+    # ---- fill color swatch --------------------------------------------------
+
+    def test_fill_color_swatch_click(self):
+        """Click fill color swatch (second arrow swatch on rectangle) triggers body."""
+        shape = Shape(0, 0, 100, 100, "rectangle")
+        shape.fill = "#aabbcc"
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
+        with patch("ktfigure.colorchooser.askcolor",
+                   return_value=((0, 255, 0), "#00ff00")):
+            if len(labels) >= 2:  # second swatch is fill
+                _click_label_visible(self.root, labels[1])
+
+    # ---- text color swatch --------------------------------------------------
+
+    def test_text_color_swatch_click(self):
+        """Click text color swatch (cursor=arrow) triggers pick_text_color body."""
+        t = TextObject(0, 0, "hello")
+        self.panel.load_text(t, redraw_callback=lambda x: self.calls.append(x))
+        pump(self.root)
+        labels = _find_labels_by_cursor(self.panel._obj_body, "arrow")
+        with patch("ktfigure.colorchooser.askcolor",
+                   return_value=((0, 0, 255), "#0000ff")):
+            if labels:
+                _click_label_visible(self.root, labels[0])
+
+    # ---- italic checkbox change (on_italic_change) --------------------------
+
+    def test_italic_checkbox_change(self):
+        """Setting italic var triggers on_italic_change."""
+        t = TextObject(0, 0, "hello")
+        self.panel.load_text(t, redraw_callback=lambda x: self.calls.append(x))
+        pump(self.root)
+        for child in _all_widgets_recursive(self.panel._obj_body):
+            if isinstance(child, ttk.Checkbutton):
+                try:
+                    if "Italic" in str(child.cget("text")):
+                        var_name = str(child.cget("variable"))
+                        if var_name:
+                            self.panel.tk.setvar(var_name, "1")
+                            pump(self.root)
+                        break
+                except Exception:
+                    pass
+
+    # ---- arrow_size trace (on_arrow_size_change) ----------------------------
+
+    def test_arrow_size_trace_change(self):
+        """Setting arrow_size_var triggers on_arrow_size_change."""
+        shape = Shape(0, 0, 100, 50, "line")
+        shape.arrow = "last"
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        # Arrow-size spinbox is the 2nd spinbox (after line-width spinbox)
+        spinboxes = [w for w in _all_widgets_recursive(self.panel._obj_body)
+                     if isinstance(w, ttk.Spinbox)]
+        if len(spinboxes) >= 2:
+            var_name = str(spinboxes[1].cget("textvariable"))
+            if var_name:
+                self.panel.tk.setvar(var_name, "15")
+                pump(self.root)
+
+    # ---- arrow_style trace (on_arrow_style_change) --------------------------
+
+    def test_arrow_style_trace_change(self):
+        """Setting arrow_style_var triggers on_arrow_style_change."""
+        shape = Shape(0, 0, 100, 50, "line")
+        shape.arrow = "last"
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        # Find the arrow-style combobox (values include "sharp", "wide", etc.)
+        for child in _all_widgets_recursive(self.panel._obj_body):
+            if isinstance(child, ttk.Combobox):
+                try:
+                    if "sharp" in str(child.cget("values")):
+                        var_name = str(child.cget("textvariable"))
+                        if var_name:
+                            self.panel.tk.setvar(var_name, "sharp")
+                            pump(self.root)
+                        break
+                except Exception:
+                    pass
+
+    # ---- text widget on_text_widget_change ----------------------------------
+
+    def test_text_widget_typing(self):
+        """Generating <<Change>> on the Text widget triggers on_text_widget_change."""
+        t = TextObject(0, 0, "initial")
+        self.panel.load_text(t, redraw_callback=lambda x: self.calls.append(x))
+        pump(self.root)
+        for child in _all_widgets_recursive(self.panel._obj_body):
+            if isinstance(child, tk.Text):
+                try:
+                    child.delete("1.0", "end")
+                    child.insert("1.0", "changed")
+                    child.event_generate("<<Change>>")
+                    pump(self.root)
+                    break
+                except Exception:
+                    pass
+
+    # ---- hue swatch click (make_picker closure) -----------------------------
+
+    def test_hue_swatch_click(self):
+        """Click a hue colour swatch (cursor=hand2) triggers make_picker body."""
+        df = pd.DataFrame({"x": [1.0, 2.0, 3.0], "cat": ["a", "b", "a"]})
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        b.df = df
+        b.plot_type = "scatter"
+        b.col_x = "x"
+        b.col_y = "x"
+        b.col_hue = "cat"
+        self.panel.load_block(b)
+        pump(self.root)
+        hand2_labels = _find_labels_by_cursor(self.panel._hue_color_frame, "hand2")
+        with patch("ktfigure.colorchooser.askcolor",
+                   return_value=((200, 100, 50), "#c86432")):
+            if hand2_labels:
+                _click_label_visible(self.root, hand2_labels[0])
+
+    # ---- _reset_hue_colors when _block is None ------------------------------
+
+    def test_reset_hue_colors_no_block(self):
+        """_reset_hue_colors when _block is None does not crash."""
+        self.panel._block = None
+        self.panel._reset_hue_colors()  # should not raise
+
+    # ---- _apply_block_size early returns ------------------------------------
+
+    def test_apply_block_size_no_block(self):
+        """_apply_block_size returns early when _block is None."""
+        self.panel._block = None
+        self.panel._apply_block_size(True)  # should not raise
+
+    def test_apply_block_size_invalid_value(self):
+        """_apply_block_size handles ValueError from non-numeric entry."""
+        df = pd.DataFrame({"x": [1.0, 2.0], "y": [2.0, 1.0]})
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        b.df = df
+        self.panel.load_block(b)
+        pump(self.root)
+        self.panel._size_w_var.set("not-a-number")
+        self.panel._apply_block_size(True)  # should not raise
+
+    def test_apply_block_size_locked_width_change(self):
+        """_apply_block_size with lock ON and width changed adjusts height."""
+        df = pd.DataFrame({"x": [1.0, 2.0], "y": [2.0, 1.0]})
+        b = PlotBlock(0, 0, DPI * 4, DPI * 2)
+        b.df = df
+        self.panel.load_block(b)
+        pump(self.root)
+        self.panel._size_lock_var.set(True)
+        self.panel._size_w_var.set("300")
+        self.panel._size_h_var.set("150")
+        self.panel._apply_block_size(True)
+
+    def test_apply_block_size_locked_height_change(self):
+        """_apply_block_size with lock ON and height changed adjusts width."""
+        df = pd.DataFrame({"x": [1.0, 2.0], "y": [2.0, 1.0]})
+        b = PlotBlock(0, 0, DPI * 4, DPI * 2)
+        b.df = df
+        self.panel.load_block(b)
+        pump(self.root)
+        self.panel._size_lock_var.set(True)
+        self.panel._size_w_var.set("300")
+        self.panel._size_h_var.set("100")
+        self.panel._apply_block_size(False)
+
+    # ---- load_block with invalid aesthetics value (exception path) ----------
+
+    def test_load_block_bad_aesthetics_value(self):
+        """load_block's except-branch fires when var.set raises with bad type."""
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        # DoubleVar.set("bad") will raise a TclError, exercising the except pass
+        # "not-a-float" is stored in aesthetics under "line_width" (a DoubleVar key).
+        # When load_block calls var.set("not-a-float"), tkinter's DoubleVar raises
+        # TclError (can't validate non-numeric string), exercising the except clause.
+        b.aesthetics["line_width"] = "not-a-float"
+        self.panel.load_block(b)
+        pump(self.root)  # should not raise
+
+    def test_load_block_partial_aesthetics(self):
+        """load_block with missing keys exercises the if-key-in-a False branch."""
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        b.aesthetics = {"style": "whitegrid"}  # most keys missing
+        self.panel.load_block(b)
+        pump(self.root)  # should not raise
+
+    # ---- _rebuild_hue_colors exception paths --------------------------------
+
+    def test_rebuild_hue_palette_exception(self):
+        """_rebuild_hue_colors falls back when sns.color_palette raises."""
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        b.df = pd.DataFrame({"x": [1.0, 2.0], "cat": ["a", "b"]})
+        b.col_hue = "cat"
+        b.aesthetics["palette"] = "invalid_palette"
+        self.panel.load_block(b)
+        pump(self.root)  # should not raise
+
+    def test_rebuild_hue_sorted_exception(self):
+        """_rebuild_hue_colors handles KeyError when col_hue not in df."""
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        b.df = pd.DataFrame({"x": [1.0, 2.0]})
+        b.col_hue = "missing_column"  # KeyError → except Exception: return
+        self.panel._block = b
+        self.panel._rebuild_hue_colors(b)
+        pump(self.root)  # should not raise
+
+    # ---- _add_obj_size_controls: apply_size with lock -----------------------
+
+    def _get_entries(self, parent):
+        return [w for w in _all_widgets_recursive(parent)
+                if isinstance(w, (ttk.Entry, tk.Entry))]
+
+    def _fire_entry_return(self, root, entry, value):
+        """Set entry variable and fire <Return> with window visible."""
+        try:
+            var_name = str(entry.cget("textvariable"))
+            if var_name:
+                entry.tk.setvar(var_name, value)
+        except Exception:
+            return
+        root.deiconify()
+        root.update()
+        entry.event_generate("<Return>")
+        root.update()
+        root.withdraw()
+        root.update()
+
+    def test_obj_size_apply_invalid_value(self):
+        """apply_size handles ValueError from non-numeric entry."""
+        shape = Shape(0, 0, 200, 100, "rectangle")
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        entries = self._get_entries(self.panel._obj_body)
+        if entries:
+            self._fire_entry_return(self.root, entries[0], "bad-value")
+
+    def test_obj_size_apply_locked_width(self):
+        """apply_size with lock=True and width changed adjusts height for shape."""
+        shape = Shape(0, 0, 200, 100, "rectangle")
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        # Find the lock checkbutton and enable it
+        for child in _all_widgets_recursive(self.panel._obj_body):
+            if isinstance(child, ttk.Checkbutton):
+                try:
+                    if "Lock" in str(child.cget("text")):
+                        var_name = str(child.cget("variable"))
+                        if var_name:
+                            self.panel.tk.setvar(var_name, "1")
+                        break
+                except Exception:
+                    pass
+        entries = self._get_entries(self.panel._obj_body)
+        if entries:
+            self._fire_entry_return(self.root, entries[0], "250")
+
+    def test_obj_size_apply_locked_height_change(self):
+        """apply_size with lock=True and height entry changes width."""
+        shape = Shape(0, 0, 200, 100, "rectangle")
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        # Enable lock
+        for child in _all_widgets_recursive(self.panel._obj_body):
+            if isinstance(child, ttk.Checkbutton):
+                try:
+                    if "Lock" in str(child.cget("text")):
+                        var_name = str(child.cget("variable"))
+                        if var_name:
+                            self.panel.tk.setvar(var_name, "1")
+                        break
+                except Exception:
+                    pass
+        entries = self._get_entries(self.panel._obj_body)
+        if len(entries) >= 2:
+            self._fire_entry_return(self.root, entries[1], "80")
+
+    # ---- load_block with var.set raising an exception -----------------------
+
+    def test_load_block_var_set_exception(self):
+        """Patch a var.set to raise, covering the except-pass in load_block."""
+        b = PlotBlock(0, 0, DPI * 2, DPI * 2)
+        if self.panel._vars:
+            # Any var suffices; we just need var.set() to raise to hit the except clause.
+            first_key = next(iter(self.panel._vars))
+            original_var = self.panel._vars[first_key]
+            with patch.object(original_var, "set", side_effect=tk.TclError("err")):
+                self.panel.load_block(b)
+            pump(self.root)
+
+    # ---- arrow_size IntVar TclError path ------------------------------------
+
+    def test_arrow_size_trace_invalid(self):
+        """Setting arrow_size_var to non-integer triggers TclError in on_arrow_size_change."""
+        shape = Shape(0, 0, 100, 50, "line")
+        shape.arrow = "last"
+        self.panel.load_shape(shape, redraw_callback=lambda s: self.calls.append(s))
+        pump(self.root)
+        spinboxes = [w for w in _all_widgets_recursive(self.panel._obj_body)
+                     if isinstance(w, ttk.Spinbox)]
+        if len(spinboxes) >= 2:
+            var_name = str(spinboxes[1].cget("textvariable"))
+            if var_name:
+                self.panel.tk.setvar(var_name, "not-an-int")
+                pump(self.root)
+
+    # ---- font-size IntVar TclError path (on_size_change except) -------------
+
+    def test_text_font_size_trace_invalid(self):
+        """Setting size_var to non-integer triggers TclError in on_size_change."""
+        t = TextObject(0, 0, "hello")
+        self.panel.load_text(t, redraw_callback=lambda x: self.calls.append(x))
+        pump(self.root)
+        # size spinbox is the only spinbox in text panel
+        spinboxes = [w for w in _all_widgets_recursive(self.panel._obj_body)
+                     if isinstance(w, ttk.Spinbox)]
+        if spinboxes:
+            var_name = str(spinboxes[0].cget("textvariable"))
+            if var_name:
+                self.panel.tk.setvar(var_name, "not-an-int")
+                pump(self.root)

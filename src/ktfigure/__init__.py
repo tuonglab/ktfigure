@@ -170,13 +170,16 @@ FONT_FAMILIES = [
 # ---------------------------------------------------------------------------
 # Mouse wheel scrolling helper
 # ---------------------------------------------------------------------------
-def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical"):
+def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical", stop_propagation=False):
     """Bind mouse wheel events to a widget for scrolling a canvas or scrollable widget.
 
     Args:
         widget: The widget to bind events to (e.g., frame, canvas)
         canvas_or_scrollable: The canvas or treeview to scroll
         orientation: "vertical", "horizontal", or "both"
+        stop_propagation: When True, return "break" so the widget's own class-level
+            scroll handler (e.g., Combobox option cycling, Spinbox value changing)
+            does not run.
     """
 
     def _on_mousewheel(event):
@@ -195,6 +198,8 @@ def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical"):
         if orientation in ("horizontal", "both") and event.state & 0x1:  # Shift key
             if hasattr(canvas_or_scrollable, "xview_scroll"):
                 canvas_or_scrollable.xview_scroll(delta, "units")
+        if stop_propagation:
+            return "break"
 
     def _on_horizontal_scroll(event):
         # Horizontal scroll for touchpads/Shift+wheel
@@ -207,6 +212,8 @@ def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical"):
 
         if hasattr(canvas_or_scrollable, "xview_scroll"):
             canvas_or_scrollable.xview_scroll(delta, "units")
+        if stop_propagation:
+            return "break"
 
     # Bind for different platforms
     widget.bind("<MouseWheel>", _on_mousewheel)  # Windows/macOS
@@ -994,6 +1001,7 @@ class AestheticsPanel(ttk.Frame):
 
         # scrollable body – vertical + horizontal
         canvas = tk.Canvas(self._body, highlightthickness=0)
+        self._canvas = canvas
         vsb = ttk.Scrollbar(self._body, orient="vertical", command=canvas.yview)
         hsb = ttk.Scrollbar(self._body, orient="horizontal", command=canvas.xview)
         self._inner = ttk.Frame(canvas)
@@ -1252,9 +1260,26 @@ class AestheticsPanel(ttk.Frame):
         ).pack(anchor="w")
         self._hue_color_map: dict = {}  # {str(value): hex_color}
 
+        # Ensure mousewheel scrolls the canvas even when hovering over child widgets
+        self._bind_scroll_recursive(self._inner)
+
         self._bind_auto_apply()
 
     # ---- auto-apply wiring ----------------------------------------------
+    def _bind_scroll_recursive(self, widget):
+        """Bind mousewheel events to *widget* and all its descendants so the
+        Aesthetics panel scrolls regardless of which child widget the pointer
+        is hovering over.
+
+        For Combobox and Spinbox widgets, ``stop_propagation=True`` is used so
+        that scrolling the panel does not inadvertently cycle through their
+        options or change their values.
+        """
+        stop = isinstance(widget, (ttk.Combobox, ttk.Spinbox))
+        bind_mousewheel(widget, self._canvas, "both", stop_propagation=stop)
+        for child in widget.winfo_children():
+            self._bind_scroll_recursive(child)
+
     def _bind_auto_apply(self):
         def on_change(*_):
             if not self._loading:
@@ -1715,11 +1740,13 @@ class AestheticsPanel(ttk.Frame):
             rf = ttk.Frame(self._hue_color_frame)
             rf.pack(fill="x", pady=1)
             ttk.Label(rf, text=k, width=14, anchor="w").pack(side="left")
-            swatch = tk.Label(rf, bg=hex_c, width=3, relief="solid", borderwidth=1)
+            swatch = tk.Label(
+                rf, bg=hex_c, width=3, relief="solid", borderwidth=1, cursor="hand2"
+            )
             swatch.pack(side="left", padx=4)
 
             def make_picker(v=k, sw=swatch):
-                def pick():
+                def pick(*_):
                     res = colorchooser.askcolor(
                         color=self._hue_color_map.get(v, "#4C72B0"),
                         title=f'Colour for "{v}"',
@@ -1732,7 +1759,10 @@ class AestheticsPanel(ttk.Frame):
 
                 return pick
 
-            ttk.Button(rf, text="Pick…", command=make_picker()).pack(side="left")
+            swatch.bind("<Button-1>", make_picker())
+
+        # Re-bind scroll events so newly created rows also scroll the panel
+        self._bind_scroll_recursive(self._hue_color_frame)
 
     def _reset_hue_colors(self):
         self._hue_color_map = {}
@@ -1964,7 +1994,18 @@ class PlotRenderer:
         # Build palette: custom hue mapping > named palette > None (when color override)
         hue_pal = a.get("hue_palette", {})
         if a["use_color"]:
-            palette = None
+            if hue is not None and df is not None:
+                # When hue is active, seaborn ignores `color` and uses a palette
+                # per group. Build a dict mapping every hue value to the chosen
+                # colour so the single-colour override is honoured.
+                try:
+                    hue_values = df[hue].dropna().unique()
+                    palette = {val: color for val in hue_values}
+                    color = None
+                except Exception:
+                    palette = None
+            else:
+                palette = None
         elif hue_pal and hue:
             # Convert string keys back to original types to match dataframe values
             palette = {}
@@ -4051,7 +4092,7 @@ class KTFigure:
             scale_y = max(scale_y, 0.01)
 
             # Apply Shift constraint (proportional scaling)
-            if self._shift_pressed:
+            if self._is_shift_pressed(event):
                 avg_scale = (scale_x + scale_y) / 2
                 scale_x = scale_y = avg_scale
 
@@ -4151,7 +4192,7 @@ class KTFigure:
                     anchor_x, anchor_y = obj.x1, obj.y1
 
                 # Apply Shift constraint for 45-degree angles
-                if self._shift_pressed:
+                if self._is_shift_pressed(event):
                     dx = bx - anchor_x
                     dy = by - anchor_y
                     angle = math.degrees(math.atan2(dy, dx)) % 360
@@ -4174,7 +4215,7 @@ class KTFigure:
                 self._draw_handles_shape(self._resize_shape)
                 return
 
-            if self._shift_pressed and hasattr(self, "_resize_orig_dims"):
+            if self._is_shift_pressed(event) and hasattr(self, "_resize_orig_dims"):
                 # Proportional scaling from opposite corner
                 ox1, oy1, ox2, oy2 = self._resize_orig_dims
                 orig_w = ox2 - ox1
@@ -4270,7 +4311,7 @@ class KTFigure:
             sx, sy = self._drag_start
 
             # Apply Shift constraints
-            if self._shift_pressed:
+            if self._is_shift_pressed(event):
                 if self._mode == "draw_line":
                     # Snap line to 45-degree angles
                     dx = bx - sx
@@ -4524,7 +4565,7 @@ class KTFigure:
                 self._rubber_rect = None
 
             # Apply Shift constraints (same as in _mouse_drag)
-            if self._shift_pressed:
+            if self._is_shift_pressed(event):
                 if self._mode == "draw_line":
                     # Snap line to 45-degree angles
                     dx = bx - sx
