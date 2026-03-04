@@ -2630,16 +2630,22 @@ class KTFigure:
         self._btn_add_board.pack(side="right", padx=(1, 2))
 
         self._board_var = tk.StringVar(value="1")
-        self._board_combo = ttk.Combobox(
+        self._board_btn = tk.Button(
             ab_right,
             textvariable=self._board_var,
-            values=["1"],
             width=3,
+            bd=1,
+            relief="solid",
+            bg="white",
+            fg="#1e293b",
+            activebackground="#e2e8f0",
             font=("", 9),
-            state="readonly",
+            cursor="arrow",
+            command=self._show_board_menu,
         )
-        self._board_combo.pack(side="right", padx=(0, 4))
-        self._board_combo.bind("<<ComboboxSelected>>", self._on_board_combo_select)
+        self._board_btn.pack(side="right", padx=(0, 4))
+        # Alias keeps existing tests and _apply_theme references intact
+        self._board_combo = self._board_btn
 
         # Keep reference list for backward compat (tests check len/attributes)
         self._artboard_tab_btns: list = []
@@ -2920,23 +2926,34 @@ class KTFigure:
     def _center_view(self):
         """Scroll the canvas so the active artboard is centered in the viewport."""
         self._cv.update_idletasks()
-        # Use xview/yview to get the current visible fraction of the scrollregion.
-        # This is more reliable than winfo_width/height() in all layout contexts.
-        x0, x1 = self._cv.xview()
-        y0, y1 = self._cv.yview()
-        visible_w_frac = x1 - x0   # fraction of total canvas that is visible
-        visible_h_frac = y1 - y0
+        canvas_w = self._cv.winfo_width()
+        canvas_h = self._cv.winfo_height()
         z = self._zoom
-        total_w = self._canvas_total_width() * z
-        total_h = self._canvas_total_height() * z
-        # Active artboard center in canvas coordinates
+        # Center of the active artboard in canvas coordinates (at current zoom)
         artboard_cx = (self._board_x_origin(self._active_board) + A4_W / 2) * z
         artboard_cy = (BOARD_PAD + A4_H / 2) * z
-        # Fraction of scrollregion to place at the LEFT/TOP edge of the viewport
-        xfrac = max(0.0, min(1.0, artboard_cx / total_w - visible_w_frac / 2))
-        yfrac = max(0.0, min(1.0, artboard_cy / total_h - visible_h_frac / 2))
-        self._cv.xview_moveto(xfrac)
-        self._cv.yview_moveto(yfrac)
+        # Ideal top-left corner of the viewport (in canvas coordinates) to center
+        target_x = artboard_cx - canvas_w / 2
+        target_y = artboard_cy - canvas_h / 2
+        # Normal content bounding box (canvas coords at current zoom)
+        content_w = self._canvas_total_width() * z
+        content_h = self._canvas_total_height() * z
+        # Expand the scrollregion if the ideal viewport position would fall outside
+        # it — this ensures xview_moveto/yview_moveto can actually reach the target.
+        # Negative sr_x0/sr_y0 lets us scroll to expose empty canvas to the
+        # left/top of the content (which is drawn at absolute coordinate (0,0)+).
+        sr_x0 = min(0.0, target_x)
+        sr_y0 = min(0.0, target_y)
+        sr_x1 = max(content_w, target_x + canvas_w)
+        sr_y1 = max(content_h, target_y + canvas_h)
+        self._cv.configure(scrollregion=(sr_x0, sr_y0, sr_x1, sr_y1))
+        # Scroll fraction within the (possibly expanded) scrollregion
+        total_w = sr_x1 - sr_x0
+        total_h = sr_y1 - sr_y0
+        xfrac = (target_x - sr_x0) / total_w if total_w > 0 else 0.0
+        yfrac = (target_y - sr_y0) / total_h if total_h > 0 else 0.0
+        self._cv.xview_moveto(max(0.0, min(1.0, xfrac)))
+        self._cv.yview_moveto(max(0.0, min(1.0, yfrac)))
         self._set_status("View centered on artboard.")
 
     # -----------------------------------------------------------------------
@@ -2955,15 +2972,15 @@ class KTFigure:
         ab["redo_stack"] = self._redo_stack
 
     def _rebuild_artboard_buttons(self):
-        """Update the artboard combobox to reflect the current artboards list.
+        """Update the artboard page-selector button to reflect the current artboards list.
 
         Kept as the canonical 'refresh artboard UI' method so all callers work
         unchanged.  The old per-button list ``_artboard_tab_btns`` is also
         updated for backward compatibility with existing tests.
         """
         values = [str(i + 1) for i in range(len(self._artboards))]
-        self._board_combo["values"] = values
-        self._board_combo.set(str(self._active_board + 1))
+        # Update the StringVar so the button label shows the active page.
+        self._board_var.set(str(self._active_board + 1))
         # Keep legacy list in sync: one dummy entry per artboard, length is
         # what tests check.
         self._artboard_tab_btns = values
@@ -2972,13 +2989,32 @@ class KTFigure:
             state="normal" if len(self._artboards) > 1 else "disabled"
         )
 
-    def _on_board_combo_select(self, event=None):
-        """Switch to the artboard chosen in the dropdown."""
-        try:
-            idx = int(self._board_var.get()) - 1
-        except ValueError:
-            return
-        self._switch_artboard(idx)
+    def _show_board_menu(self):
+        """Show a popup menu listing all artboard pages, positioned ABOVE the button."""
+        n = len(self._artboards)
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
+        menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            font=("", 9),
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground="#3b82f6",
+            activeforeground="white",
+        )
+        for i in range(n):
+            menu.add_command(
+                label=str(i + 1),
+                command=lambda idx=i: self._switch_artboard(idx),
+            )
+        self._board_btn.update_idletasks()
+        # Estimate menu height: ~20px per item + small top/bottom border
+        _MENU_ITEM_H = 20
+        _MENU_BORDER_H = 6
+        approx_h = n * _MENU_ITEM_H + _MENU_BORDER_H
+        x = self._board_btn.winfo_rootx()
+        y = self._board_btn.winfo_rooty() - approx_h
+        menu.post(x, max(0, y))
 
     def _switch_artboard(self, idx: int):
         """Save current artboard state and switch to artboard *idx*."""
@@ -3688,7 +3724,13 @@ class KTFigure:
         self._btn_del_board.configure(
             bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
         )
-        self._board_combo.master.configure(bg=TC["tb"])
+        # _board_btn is a plain tk.Button styled to look like a combobox
+        self._board_btn.configure(
+            bg="white" if not self._is_dark else "#3c3c3c",
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+        )
+        self._board_btn.master.configure(bg=TC["tb"])
         self._rebuild_artboard_buttons()
 
         # Canvas outer frame and canvas itself
