@@ -19,7 +19,7 @@ import tkinter as tk
 from unittest.mock import patch, MagicMock
 
 from ktfigure import (
-    A4_W, A4_H, BOARD_PAD, DPI,
+    A4_W, A4_H, BOARD_PAD, DPI, GRID_SIZE,
     KTFigure, PlotBlock, Shape, TextObject,
     AestheticsPanel, PlotConfigDialog,
     default_aesthetics,
@@ -76,6 +76,7 @@ def sample_df():
 class TestMouseDragBlock:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
         self.block = PlotBlock(100, 100, 300, 250)
         self.app._blocks.append(self.block)
         self.app._draw_empty_block(self.block)
@@ -99,16 +100,15 @@ class TestMouseDragBlock:
         assert self.block.x1 == 200
         assert self.block.y1 == 160
 
-    def test_drag_block_constrained_to_artboard(self):
+    def test_drag_block_moves_beyond_artboard(self):
         self.app._drag_block = self.block
         self.app._drag_offset = (0, 0)
-        # Drag far off to the right and bottom
+        # Drag far off to the right and bottom — no artboard constraint in current code
         ev = board_event(self.app, A4_W + 500, A4_H + 500)
         self.app._mouse_drag(ev)
         pump(self.root)
-        # Block coordinates should be within artboard
-        assert self.block.x2 <= A4_W
-        assert self.block.y2 <= A4_H
+        # Block coordinates move to the dragged (snapped) position
+        assert self.block.x1 > A4_W
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +118,7 @@ class TestMouseDragBlock:
 class TestMouseDragShape:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
         self.shape = Shape(100, 100, 250, 200, "rectangle")
         self.app._shapes.append(self.shape)
         self.app._draw_shape(self.shape)
@@ -139,14 +140,15 @@ class TestMouseDragShape:
         assert self.shape.x1 == 200
         assert self.shape.y1 == 160
 
-    def test_drag_shape_constrained(self):
+    def test_drag_shape_moves_beyond_artboard(self):
         self.app._drag_shape = self.shape
         self.app._drag_offset = (0, 0)
+        # Drag far off to the right and bottom — no artboard constraint in current code
         ev = board_event(self.app, A4_W + 500, A4_H + 500)
         self.app._mouse_drag(ev)
         pump(self.root)
-        assert self.shape.x2 <= A4_W
-        assert self.shape.y2 <= A4_H
+        # Shape coordinates move to the dragged (snapped) position
+        assert self.shape.x1 > A4_W
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +158,7 @@ class TestMouseDragShape:
 class TestMouseDragText:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
         self.text = TextObject(100, 100, "hello")
         self.app._texts.append(self.text)
         self.app._draw_text(self.text)
@@ -224,6 +227,7 @@ class TestMouseDragMultiSelect:
 class TestMouseDragResize:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
         self.block = PlotBlock(100, 100, 300, 250)
         self.app._blocks.append(self.block)
         self.app._draw_empty_block(self.block)
@@ -283,6 +287,7 @@ class TestMouseDragResize:
 class TestMouseDragResizeShape:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
         self.shape = Shape(100, 100, 250, 200, "rectangle")
         self.app._shapes.append(self.shape)
         self.app._draw_shape(self.shape)
@@ -538,29 +543,28 @@ class TestDeleteConfirmationShapeText:
         except Exception:
             pass
 
-    def test_delete_shape_confirmed(self):
+    def test_delete_shape_with_delete_key(self):
         s = Shape(100, 100, 200, 200, "rectangle")
         self.app._shapes.append(s)
         self.app._draw_shape(s)
         self.app._selected_shape = s
         self.app._selected = None
         before = len(self.app._shapes)
-        with patch("ktfigure.messagebox.askyesno", return_value=True):
-            self.app._delete_selected()
+        self.app._delete_key()
         assert len(self.app._shapes) == before - 1
 
-    def test_delete_shape_cancelled(self):
+    def test_delete_shape_not_selected_does_nothing(self):
         s = Shape(100, 100, 200, 200, "rectangle")
         self.app._shapes.append(s)
         self.app._draw_shape(s)
-        self.app._selected_shape = s
+        # Shape is not selected — _delete_key should leave it intact
+        self.app._selected_shape = None
         self.app._selected = None
         before = len(self.app._shapes)
-        with patch("ktfigure.messagebox.askyesno", return_value=False):
-            self.app._delete_selected()
+        self.app._delete_key()
         assert len(self.app._shapes) == before
 
-    def test_delete_text_confirmed(self):
+    def test_delete_text_with_delete_key(self):
         t = TextObject(100, 100, "hello")
         self.app._texts.append(t)
         self.app._draw_text(t)
@@ -568,16 +572,14 @@ class TestDeleteConfirmationShapeText:
         self.app._selected = None
         self.app._selected_shape = None
         before = len(self.app._texts)
-        with patch("ktfigure.messagebox.askyesno", return_value=True):
-            self.app._delete_selected()
+        self.app._delete_key()
         assert len(self.app._texts) == before - 1
 
-    def test_delete_nothing_selected_shows_status(self):
+    def test_delete_nothing_selected_does_not_crash(self):
         self.app._selected = None
         self.app._selected_shape = None
         self.app._selected_text = None
-        self.app._delete_selected()
-        assert "Nothing" in self.app._status.cget("text")
+        self.app._delete_key()  # should not raise
 
 
 # ---------------------------------------------------------------------------

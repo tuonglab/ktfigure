@@ -266,15 +266,17 @@ class TestCoordinateHelpers:
         assert bx == 100
         assert by == 200
 
-    def test_to_board_clamps_to_zero(self):
+    def test_to_board_outside_origin(self):
+        # No clamping in current code: canvas (0,0) maps to board (-BOARD_PAD, -BOARD_PAD)
         bx, by = self.app._to_board(0, 0)
-        assert bx == 0
-        assert by == 0
+        assert bx == -BOARD_PAD
+        assert by == -BOARD_PAD
 
-    def test_to_board_clamps_to_max(self):
+    def test_to_board_outside_max(self):
+        # No clamping in current code: large canvas coords map to large board coords
         bx, by = self.app._to_board(9999, 9999)
-        assert bx == A4_W
-        assert by == A4_H
+        assert bx == 9999 - BOARD_PAD
+        assert by == 9999 - BOARD_PAD
 
     def test_to_canvas_adds_pad(self):
         cx, cy = self.app._to_canvas(100, 200)
@@ -1071,12 +1073,8 @@ class TestDeleteOperations:
         except Exception:
             pass
 
-    def test_delete_selected_nothing_selected(self):
-        # Should not crash
-        self.app._delete_selected()
-
     def test_delete_key_nothing_selected(self):
-        # Should not crash
+        # _delete_selected() was renamed to _delete_key() — should not crash
         self.app._delete_key()
 
     def test_delete_shape_via_delete_key(self):

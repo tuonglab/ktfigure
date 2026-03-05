@@ -99,6 +99,8 @@ class TestGridSnapDefaults:
 class TestSnapHelper:
     def setup_method(self):
         self.root, self.app = make_app()
+        # Set snap grid size to GRID_SIZE so snap tests are meaningful
+        self.app._snap_grid_size = GRID_SIZE
 
     def teardown_method(self):
         try:
@@ -254,6 +256,8 @@ class TestToggleSnapToGrid:
 class TestSnapOnDraw:
     def setup_method(self):
         self.root, self.app = make_app()
+        # Set snap grid size to GRID_SIZE so tests verify 20-px snapping
+        self.app._snap_grid_size = GRID_SIZE
 
     def teardown_method(self):
         try:
@@ -315,6 +319,8 @@ class TestSnapOnDraw:
 class TestSnapOnMove:
     def setup_method(self):
         self.root, self.app = make_app()
+        # Set snap grid size to GRID_SIZE so tests verify 20-px snapping
+        self.app._snap_grid_size = GRID_SIZE
 
     def teardown_method(self):
         try:
@@ -372,6 +378,8 @@ class TestSnapOnMove:
 class TestSnapOnResize:
     def setup_method(self):
         self.root, self.app = make_app()
+        # Set snap grid size to GRID_SIZE so tests verify 20-px snapping
+        self.app._snap_grid_size = GRID_SIZE
 
     def teardown_method(self):
         try:

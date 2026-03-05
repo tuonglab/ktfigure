@@ -66,14 +66,23 @@ jobs:
               --cov-fail-under=90 \
               -v
 
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install python-tk
+
       - name: Run tests with coverage (non-Linux)
         if: runner.os != 'Linux'
+        env:
+          # Prevents fork-safety crashes in multiprocessing on macOS (harmless on other OS)
+          OBJC_DISABLE_INITIALIZE_FORK_SAFETY: "YES"
         run: |
           python -m pytest \
             --cov=ktfigure \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-fail-under=90 \
+            --timeout=60 \
             -v
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
