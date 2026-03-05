@@ -396,7 +396,9 @@ class TestMagnifyZoom:
     def test_magnify_binding_uses_uppercase_D_substitution(self):
         """The <Magnify> Tcl bind script must pass %D (float data field), not
         %d (integer detail field).  Using %d was the bug that caused the handler
-        to always receive '0' instead of the actual magnification float."""
+        to always receive '0' instead of the actual magnification float.
+        The script must also pass %x %y so the handler receives cursor position
+        for pointer-centred zoom."""
         bind_script = self.app._cv.tk.call(
             "bind", self.app._cv._w, "<Magnify>"
         )
@@ -405,6 +407,37 @@ class TestMagnifyZoom:
             "pinch-to-zoom will silently receive 0 instead of the "
             "actual magnification delta"
         )
+        assert "%x" in bind_script and "%y" in bind_script, (
+            "<Magnify> bind script does not contain '%x %y'; "
+            "pinch-to-zoom will not receive cursor position for cursor-centred zoom"
+        )
+
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_zoom_in_with_cursor_coords(self):
+        """_on_magnify with x_str/y_str cursor args must zoom in and forward
+        the cursor position to _set_zoom (cursor-centred zoom)."""
+        app = self.app
+        before = app._zoom
+        app._on_magnify("0.06", "200", "150")
+        app._on_magnify("0.06", "200", "150")  # second call brings cumulative to 0.12, crossing the 0.1 threshold
+        pump(self.root)
+        assert app._zoom > before
+
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> handler is only set up on macOS",
+    )
+    def test_magnify_handler_invalid_cursor_coords_falls_back(self):
+        """_on_magnify with non-numeric x_str/y_str must still zoom (no crash)."""
+        app = self.app
+        before = app._zoom
+        app._on_magnify("0.06", "bad", "bad")
+        app._on_magnify("0.06", "bad", "bad")  # second call crosses the 0.1 threshold; zoom fires with cx=cy=None (no-cursor fallback)
+        pump(self.root)
+        assert app._zoom > before
 
 
 # ---------------------------------------------------------------------------

@@ -2561,24 +2561,23 @@ class KTFigure:
         # and the accumulator never crosses the threshold.  To work around
         # this we register a raw Tcl command that receives %D as a plain
         # string and parse it ourselves with float().  Cursor position is
-        # obtained via winfo_pointerxy() because the raw Tcl binding only
-        # passes %D; there is no %x/%y alongside a custom substitution.
+        # obtained directly from the event via %x/%y Tcl substitutions.
         if sys.platform == "darwin":
             _magnify_accum = 0.0
 
-            def _on_magnify(delta_str):
+            def _on_magnify(delta_str, x_str="0", y_str="0"):
                 nonlocal _magnify_accum
                 try:
                     delta = float(delta_str)
                 except (ValueError, TypeError):
                     return
                 _magnify_accum += delta
-                # Resolve cursor → canvas widget coords for pointer-centred zoom.
+                # %x and %y in the raw Tcl binding are cursor coords relative
+                # to the canvas widget — exactly what _zoom_in/out need.
                 try:
-                    px, py = self._cv.winfo_pointerxy()
-                    cx = px - self._cv.winfo_rootx()
-                    cy = py - self._cv.winfo_rooty()
-                except Exception:
+                    cx = int(float(x_str))
+                    cy = int(float(y_str))
+                except (ValueError, TypeError):
                     cx = cy = None
                 if _magnify_accum >= 0.1:
                     _magnify_accum = 0.0
@@ -2596,9 +2595,10 @@ class KTFigure:
                 # field of the <Magnify> event (the actual magnification amount,
                 # e.g. "0.032").  %d (lowercase) is the integer detail field
                 # (typically 0), which was the typo that kept the handler from
-                # ever receiving a non-zero value.
+                # ever receiving a non-zero value.  %x %y give the cursor
+                # position relative to the canvas widget for cursor-centred zoom.
                 self._cv.tk.call(
-                    "bind", self._cv._w, "<Magnify>", _magnify_cb + " %D"
+                    "bind", self._cv._w, "<Magnify>", _magnify_cb + " %D %x %y"
                 )
             except tk.TclError:
                 pass  # Tk build on this macOS installation doesn't support <Magnify>
@@ -2973,14 +2973,19 @@ class KTFigure:
         factor = max(0.1, min(10.0, factor))
 
         # --- capture the canvas-space point under the cursor (pre-zoom) ------
-        # canvasx/canvasy converts widget pixel → canvas coordinate at the
-        # current scroll position.  Dividing by the old zoom gives us the
-        # zoom-independent "board-space" coordinate of the pivot.
+        # xview()[0] * old_sr_width gives the canvas x at widget pixel 0
+        # (i.e. the scroll offset).  Adding cx gives the canvas x under the
+        # cursor.  Dividing by old zoom converts to zoom-independent board space.
         pivot_bx = pivot_by = None
         if cx is not None and cy is not None:
             old_z = self._zoom
-            pivot_bx = self._cv.canvasx(cx) / old_z
-            pivot_by = self._cv.canvasy(cy) / old_z
+            old_sr_w = self._canvas_total_width() * old_z
+            old_sr_h = self._canvas_total_height() * old_z
+            pivot_bx = self._cv.xview()[0] * old_sr_w + cx
+            pivot_by = self._cv.yview()[0] * old_sr_h + cy
+            # Convert canvas coords to zoom-independent board coords
+            pivot_bx /= old_z
+            pivot_by /= old_z
 
         self._zoom = factor
         pct = round(factor * 100)
@@ -2995,31 +3000,23 @@ class KTFigure:
         self._redraw_all()
 
         # --- re-scroll so the pivot point stays under the cursor (post-zoom) -
-        # The pivot board-space point maps to canvas coordinate
-        # (pivot_bx * new_zoom, pivot_by * new_zoom).  We want that canvas
-        # coordinate to sit at widget pixel (cx, cy), meaning the top-left of
-        # the viewport in canvas-space should be:
-        #   target_canvas_x = pivot_bx * new_zoom - cx
-        # Convert that to an xview fraction within the (updated) scrollregion.
+        # The board-space pivot maps to canvas coordinate pivot_bx * new_zoom.
+        # We want that canvas coordinate to sit at widget pixel cx, meaning
+        # the viewport left edge in canvas space should be:
+        #   viewport_left = pivot_bx * new_zoom - cx
+        # Expressed as an xview fraction of the new scrollregion:
+        #   fraction = viewport_left / (total_canvas_width * new_zoom)
+        # We compute the scrollregion size directly (avoids cget() parsing
+        # which returns a tuple on some Tk versions, breaking float() parsing).
         if pivot_bx is not None:
-            target_cx = pivot_bx * factor - cx
-            target_cy = pivot_by * factor - cy
-            sr = self._cv.cget("scrollregion")
-            if sr:
-                try:
-                    sr_x0, sr_y0, sr_x1, sr_y1 = (float(v) for v in str(sr).split())
-                    total_w = sr_x1 - sr_x0
-                    total_h = sr_y1 - sr_y0
-                    if total_w > 0:
-                        self._cv.xview_moveto(
-                            max(0.0, min(1.0, (target_cx - sr_x0) / total_w))
-                        )
-                    if total_h > 0:
-                        self._cv.yview_moveto(
-                            max(0.0, min(1.0, (target_cy - sr_y0) / total_h))
-                        )
-                except (ValueError, TypeError):
-                    pass
+            new_sr_w = self._canvas_total_width() * factor
+            new_sr_h = self._canvas_total_height() * factor
+            if new_sr_w > 0:
+                target_x = pivot_bx * factor - cx
+                self._cv.xview_moveto(max(0.0, min(1.0, target_x / new_sr_w)))
+            if new_sr_h > 0:
+                target_y = pivot_by * factor - cy
+                self._cv.yview_moveto(max(0.0, min(1.0, target_y / new_sr_h)))
 
     def _zoom_in(self, cx: float = None, cy: float = None):
         """Step zoom up to the next preset level.
