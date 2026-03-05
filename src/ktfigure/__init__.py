@@ -2516,10 +2516,12 @@ class KTFigure:
 
         # Ctrl+scroll (keyboard Ctrl + wheel, or Linux Button-4/5) → zoom
         def _on_ctrl_scroll(event):
+            # event.x / event.y are canvas widget pixel coords of the cursor;
+            # pass them through so the view zooms towards the pointer.
             if event.num == 4 or event.delta > 0:
-                self._zoom_in()
+                self._zoom_in(event.x, event.y)
             else:
-                self._zoom_out()
+                self._zoom_out(event.x, event.y)
             return "break"
 
         self._cv.bind("<Control-MouseWheel>", _on_ctrl_scroll)   # Windows/macOS
@@ -2553,12 +2555,14 @@ class KTFigure:
         # where bind("<Magnify>") raises TclError and would crash startup.
         #
         # Tkinter's event.delta is set via getint_event(), which calls int()
-        # on Tk's %d substitution string.  For <Magnify>, Tk reports float
+        # on Tk's %D substitution string.  For <Magnify>, Tk reports float
         # values such as "0.032"; int("0.032") raises ValueError so
         # getint_event() silently returns 0 — meaning event.delta is always 0
         # and the accumulator never crosses the threshold.  To work around
-        # this we register a raw Tcl command that receives %d as a plain
-        # string and parse it ourselves with float().
+        # this we register a raw Tcl command that receives %D as a plain
+        # string and parse it ourselves with float().  Cursor position is
+        # obtained via winfo_pointerxy() because the raw Tcl binding only
+        # passes %D; there is no %x/%y alongside a custom substitution.
         if sys.platform == "darwin":
             _magnify_accum = 0.0
 
@@ -2569,12 +2573,19 @@ class KTFigure:
                 except (ValueError, TypeError):
                     return
                 _magnify_accum += delta
+                # Resolve cursor → canvas widget coords for pointer-centred zoom.
+                try:
+                    px, py = self._cv.winfo_pointerxy()
+                    cx = px - self._cv.winfo_rootx()
+                    cy = py - self._cv.winfo_rooty()
+                except Exception:
+                    cx = cy = None
                 if _magnify_accum >= 0.1:
                     _magnify_accum = 0.0
-                    self._zoom_in()
+                    self._zoom_in(cx, cy)
                 elif _magnify_accum <= -0.1:
                     _magnify_accum = 0.0
-                    self._zoom_out()
+                    self._zoom_out(cx, cy)
 
             # Keep a reference so tests can invoke the handler directly.
             self._on_magnify = _on_magnify
@@ -2951,13 +2962,30 @@ class KTFigure:
     # -----------------------------------------------------------------------
     _ZOOM_STEPS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
 
-    def _set_zoom(self, factor: float):
-        """Apply *factor* as the new zoom level and redraw everything."""
+    def _set_zoom(self, factor: float, cx: float = None, cy: float = None):
+        """Apply *factor* as the new zoom level and redraw everything.
+
+        If *cx* and *cy* are given (canvas **widget** pixel coordinates of the
+        cursor), the scroll position is adjusted after the zoom so that the
+        same canvas point remains visually under the cursor — i.e. the view
+        zooms in/out towards the pointer rather than towards the origin.
+        """
         factor = max(0.1, min(10.0, factor))
+
+        # --- capture the canvas-space point under the cursor (pre-zoom) ------
+        # canvasx/canvasy converts widget pixel → canvas coordinate at the
+        # current scroll position.  Dividing by the old zoom gives us the
+        # zoom-independent "board-space" coordinate of the pivot.
+        pivot_bx = pivot_by = None
+        if cx is not None and cy is not None:
+            old_z = self._zoom
+            pivot_bx = self._cv.canvasx(cx) / old_z
+            pivot_by = self._cv.canvasy(cy) / old_z
+
         self._zoom = factor
         pct = round(factor * 100)
         self._zoom_var.set(f"{pct}%")
-        # Update scrollregion to cover all artboards
+        # Update scrollregion to cover all artboards at new zoom
         self._update_scrollregion()
         # Full redraw with new zoom
         self._cv.delete("all")
@@ -2966,23 +2994,58 @@ class KTFigure:
             self._draw_grid()
         self._redraw_all()
 
-    def _zoom_in(self):
-        """Step zoom up to the next preset level."""
+        # --- re-scroll so the pivot point stays under the cursor (post-zoom) -
+        # The pivot board-space point maps to canvas coordinate
+        # (pivot_bx * new_zoom, pivot_by * new_zoom).  We want that canvas
+        # coordinate to sit at widget pixel (cx, cy), meaning the top-left of
+        # the viewport in canvas-space should be:
+        #   target_canvas_x = pivot_bx * new_zoom - cx
+        # Convert that to an xview fraction within the (updated) scrollregion.
+        if pivot_bx is not None:
+            target_cx = pivot_bx * factor - cx
+            target_cy = pivot_by * factor - cy
+            sr = self._cv.cget("scrollregion")
+            if sr:
+                try:
+                    sr_x0, sr_y0, sr_x1, sr_y1 = (float(v) for v in str(sr).split())
+                    total_w = sr_x1 - sr_x0
+                    total_h = sr_y1 - sr_y0
+                    if total_w > 0:
+                        self._cv.xview_moveto(
+                            max(0.0, min(1.0, (target_cx - sr_x0) / total_w))
+                        )
+                    if total_h > 0:
+                        self._cv.yview_moveto(
+                            max(0.0, min(1.0, (target_cy - sr_y0) / total_h))
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+    def _zoom_in(self, cx: float = None, cy: float = None):
+        """Step zoom up to the next preset level.
+
+        *cx*, *cy* are optional canvas widget pixel coordinates of the cursor;
+        when provided the view zooms towards that point (see ``_set_zoom``).
+        """
         steps = self._ZOOM_STEPS
         for s in steps:
             if s > self._zoom + 0.01:
-                self._set_zoom(s)
+                self._set_zoom(s, cx, cy)
                 return
-        self._set_zoom(steps[-1])
+        self._set_zoom(steps[-1], cx, cy)
 
-    def _zoom_out(self):
-        """Step zoom down to the previous preset level."""
+    def _zoom_out(self, cx: float = None, cy: float = None):
+        """Step zoom down to the previous preset level.
+
+        *cx*, *cy* are optional canvas widget pixel coordinates of the cursor;
+        when provided the view zooms towards that point (see ``_set_zoom``).
+        """
         steps = self._ZOOM_STEPS
         for s in reversed(steps):
             if s < self._zoom - 0.01:
-                self._set_zoom(s)
+                self._set_zoom(s, cx, cy)
                 return
-        self._set_zoom(steps[0])
+        self._set_zoom(steps[0], cx, cy)
 
     def _apply_zoom_entry(self):
         """Read the zoom combobox and apply; silently ignore empty/invalid values."""

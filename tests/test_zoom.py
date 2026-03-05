@@ -413,10 +413,12 @@ class TestMagnifyZoom:
 
 class MockWheelEvent:
     """Synthetic <MouseWheel> event with configurable state and delta."""
-    def __init__(self, delta=120, state=0, num=0):
+    def __init__(self, delta=120, state=0, num=0, x=0, y=0):
         self.delta = delta
         self.state = state
         self.num = num
+        self.x = x
+        self.y = y
 
 
 class TestWindowsTouchpadZoom:
@@ -460,3 +462,129 @@ class TestWindowsTouchpadZoom:
     def test_canvas_wheel_handler_attribute_exists(self):
         """_on_canvas_wheel must be stored on the instance for testability."""
         assert callable(self.app._on_canvas_wheel)
+
+
+# ---------------------------------------------------------------------------
+# Cursor-centred zoom (Ctrl+scroll and pinch-to-zoom)
+# ---------------------------------------------------------------------------
+
+class TestCursorCentredZoom:
+    """Verify that zoom operations respect the cursor position pivot."""
+
+    def setup_method(self):
+        self.root, self.app = make_app()
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    # -- _set_zoom API --
+
+    def test_set_zoom_without_cursor_still_works(self):
+        """_set_zoom with no cursor coords must not crash and must update zoom."""
+        app = self.app
+        app._set_zoom(2.0)
+        pump(self.root)
+        assert app._zoom == 2.0
+
+    def test_set_zoom_with_cursor_updates_zoom(self):
+        """_set_zoom with cursor coords must apply the new zoom factor."""
+        app = self.app
+        app._set_zoom(2.0, cx=100, cy=80)
+        pump(self.root)
+        assert app._zoom == 2.0
+
+    def test_set_zoom_with_cursor_does_not_crash_at_boundary(self):
+        """Cursor at (0, 0) must not crash."""
+        app = self.app
+        app._set_zoom(1.5, cx=0, cy=0)
+        pump(self.root)
+        assert app._zoom == 1.5
+
+    # -- _zoom_in / _zoom_out with cursor --
+
+    def test_zoom_in_with_cursor_increases_zoom(self):
+        """_zoom_in(cx, cy) must step the zoom up."""
+        app = self.app
+        before = app._zoom
+        app._zoom_in(cx=100, cy=80)
+        pump(self.root)
+        assert app._zoom > before
+
+    def test_zoom_out_with_cursor_decreases_zoom(self):
+        """_zoom_out(cx, cy) must step the zoom down."""
+        app = self.app
+        app._set_zoom(1.25)
+        before = app._zoom
+        app._zoom_out(cx=100, cy=80)
+        pump(self.root)
+        assert app._zoom < before
+
+    def test_zoom_in_without_cursor_still_works(self):
+        """_zoom_in() with no args must still step zoom up (backwards compat)."""
+        app = self.app
+        before = app._zoom
+        app._zoom_in()
+        pump(self.root)
+        assert app._zoom > before
+
+    def test_zoom_out_without_cursor_still_works(self):
+        """_zoom_out() with no args must still step zoom down (backwards compat)."""
+        app = self.app
+        app._set_zoom(1.25)
+        before = app._zoom
+        app._zoom_out()
+        pump(self.root)
+        assert app._zoom < before
+
+    # -- Ctrl+scroll event passes cursor position --
+
+    def test_ctrl_scroll_in_with_cursor(self):
+        """Ctrl+scroll-up with explicit cursor coords must zoom in."""
+        app = self.app
+        before = app._zoom
+        evt = MockWheelEvent(delta=120, state=0x0004, x=150, y=100)
+        app._on_canvas_wheel(evt)
+        pump(self.root)
+        assert app._zoom > before
+
+    def test_ctrl_scroll_out_with_cursor(self):
+        """Ctrl+scroll-down with explicit cursor coords must zoom out."""
+        app = self.app
+        app._set_zoom(2.0)
+        before = app._zoom
+        evt = MockWheelEvent(delta=-120, state=0x0004, x=150, y=100)
+        app._on_canvas_wheel(evt)
+        pump(self.root)
+        assert app._zoom < before
+
+    # -- scroll adjusts when cursor is provided --
+
+    def test_zoom_in_at_cursor_adjusts_xview(self):
+        """Zooming in with a non-zero cx should result in a non-zero xview
+        fraction (the canvas scrolls to keep the pivot point under cx)."""
+        app = self.app
+        pump(self.root)
+        # Force the canvas to have a concrete size
+        app._cv.config(width=600, height=400)
+        pump(self.root)
+        # Start at origin
+        app._cv.xview_moveto(0)
+        app._cv.yview_moveto(0)
+        pump(self.root)
+        # Zoom in with cursor well inside the canvas
+        cx, cy = 300, 200
+        app._zoom_in(cx=cx, cy=cy)
+        pump(self.root)
+        # The zoom increased
+        assert app._zoom > 1.0
+        # xview fraction must now be > 0 (canvas was scrolled right to keep
+        # the pivot under cx=300; at zoom=1 and scroll=0, canvas-x at widget
+        # pixel 300 is 300; after zoom the same board point is further right
+        # so the canvas must scroll).
+        xview_start = app._cv.xview()[0]
+        # (pivot_bx = 300/1.0 = 300; new canvas-x = 300*1.25 = 375;
+        #  target scroll-left = 375 - 300 = 75; sr width = total_w at 125%)
+        assert xview_start > 0.0
