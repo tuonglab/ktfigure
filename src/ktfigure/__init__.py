@@ -52,9 +52,14 @@ except ImportError:
 A4_W = 794  # A4 width  at 96 DPI  (210 mm → 8.27 in → 794 px)
 A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
 BOARD_PAD = 60  # grey padding around the white artboard
+BOARD_GAP = round(0.5 * 96 / 2.54)  # ~19 px gap between side-by-side artboards (0.5 cm)
 DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
 HOVER_PAD = 5  # pixel buffer around objects for hover/cursor detection
+
+ZOOM_MIN = 0.25  # minimum canvas zoom (25 %)
+ZOOM_MAX = 4.0  # maximum canvas zoom (400 %)
+ZOOM_STEP = 1.25  # zoom factor applied per scroll tick or keyboard shortcut
 
 # Unit conversion: multiply px value by these to get the given unit
 # (or divide px by these to convert FROM the unit)
@@ -170,7 +175,9 @@ FONT_FAMILIES = [
 # ---------------------------------------------------------------------------
 # Mouse wheel scrolling helper
 # ---------------------------------------------------------------------------
-def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical", stop_propagation=False):
+def bind_mousewheel(
+    widget, canvas_or_scrollable, orientation="vertical", stop_propagation=False
+):
     """Bind mouse wheel events to a widget for scrolling a canvas or scrollable widget.
 
     Args:
@@ -183,6 +190,9 @@ def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical", stop_p
     """
 
     def _on_mousewheel(event):
+        # Ctrl+scroll is reserved for zoom — do not scroll the canvas
+        if event.state & 0x4:
+            return
         # Determine scroll direction and amount
         if event.num == 4 or event.delta > 0:
             delta = -1
@@ -462,6 +472,9 @@ class PlotBlock:
         self.label_id = None
         self._photo = None  # keep reference so GC does not collect it
         self._pil_img = None  # PIL image for export
+        self._pil_img_base = (
+            None  # original matplotlib render; used for fast zoom rescale
+        )
 
     def __deepcopy__(self, memo):
         """Custom deep-copy that skips tkinter PhotoImage (_photo), which
@@ -470,8 +483,9 @@ class PlotBlock:
         result = cls.__new__(cls)
         memo[id(self)] = result
         for k, v in self.__dict__.items():
-            if k == "_photo":
-                # ImageTk.PhotoImage holds a tkinter reference — skip it
+            if k in ("_photo", "_pil_img_base"):
+                # ImageTk.PhotoImage holds a tkinter reference; _pil_img_base is a
+                # display cache that is regenerated on demand — skip both.
                 setattr(result, k, None)
             else:
                 setattr(result, k, copy.deepcopy(v, memo))
@@ -2202,6 +2216,43 @@ class PlotRenderer:
 
 
 # ---------------------------------------------------------------------------
+# macOS pinch-to-zoom: module-level ObjC block callback
+#
+# ctypes.CFUNCTYPE closures (functions defined inside methods) do not expose
+# a directly callable C thunk to AppKit's ObjC block runtime on Python 3.13+
+# ARM64.  Module-level functions do.  State is shared via a plain dict.
+# ---------------------------------------------------------------------------
+_ktf_pinch_state: dict = {}  # populated by KTFigure._setup_macos_pinch_ctypes
+
+
+def _ktf_pinch_invoke(block_ptr, event_ptr):
+    """ObjC block invoke for NSEventMaskMagnify.
+
+    Called from AppKit's event thread; acquires the GIL explicitly.
+    Must be module-level so that ctypes exposes a real callable C thunk to
+    the ObjC block runtime (closures defined inside methods do not work).
+    """
+    import ctypes as _ct
+
+    _papi = _ct.pythonapi
+    gstate = _papi.PyGILState_Ensure()
+    try:
+        state = _ktf_pinch_state
+        msg_dbl = state.get("msg_dbl")
+        sel_mag = state.get("sel_mag")
+        pinch_q = state.get("pinch_q")
+        if msg_dbl and sel_mag and pinch_q and event_ptr:
+            mag = msg_dbl(event_ptr, sel_mag)
+            if abs(mag) > 1e-9:
+                pinch_q.put_nowait(mag)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        _papi.PyGILState_Release(_ct.c_int(gstate))
+    return event_ptr
+
+
+# ---------------------------------------------------------------------------
 # Main Application
 # ---------------------------------------------------------------------------
 class KTFigure:
@@ -2271,10 +2322,24 @@ class KTFigure:
 
         # Grid / snap state
         self._snap_to_grid: bool = True  # snap is on by default
-        self._show_grid: bool = False  # grid lines hidden by default
+        self._show_grid: bool = False    # grid lines hidden by default
+        self._grid_size: float = 1.0    # minor grid line spacing in board pts
+        self._snap_grid_size: float = 1.0  # snap-to-grid size in board pts
+
+        # Zoom state
+        self._zoom: float = 1.0  # 1.0 = 100%
+
+        # Multi-artboard state
+        # Each entry: {"blocks": [...], "shapes": [...], "texts": [...],
+        #              "undo_stack": [...], "redo_stack": [...]}
+        self._artboards: list[dict] = []  # populated after lists exist
+        self._active_board: int = 0
 
         # Clipboard
         self._clipboard = None
+
+        # Canvas zoom level (1.0 = 100 %)
+        self._zoom: float = 1.0
 
         # Theme
         self._is_dark = False
@@ -2282,6 +2347,18 @@ class KTFigure:
         self._theme_widgets: dict = {}  # refs collected during _build_ui
 
         self._build_ui()
+        # Wire artboard 0 to the already-created list objects
+        self._artboards = [
+            {
+                "blocks": self._blocks,
+                "shapes": self._shapes,
+                "texts": self._texts,
+                "undo_stack": self._undo_stack,
+                "redo_stack": self._redo_stack,
+            }
+        ]
+        self._rebuild_artboard_buttons()
+
         self._mode_select()  # Set default mode to select
         # Snap is on by default – reflect that in the button visual state
         self._btn_snap._is_active = True
@@ -2349,7 +2426,7 @@ class KTFigure:
         tbtn(
             tb1,
             "🗑  Delete",
-            self._delete_selected,
+            self._delete_key,
             bg="#fee2e2",
             fg="#991b1b",
             hover_bg="#fecaca",
@@ -2449,6 +2526,25 @@ class KTFigure:
         sep(tb3)
         self._btn_grid = tbtn(tb3, "⊞  Grid", self._toggle_grid_visible)
         self._btn_snap = tbtn(tb3, "⊡  Snap", self._toggle_snap_to_grid)
+        self._spacing_var = tk.StringVar(value="1 pt")
+        self._spacing_combo = ttk.Combobox(
+            tb3,
+            textvariable=self._spacing_var,
+            values=["1 pt", "2 pt", "5 pt", "10 pt", "20 pt", "50 pt"],
+            width=5,
+            font=("", 9),
+            takefocus=False,
+        )
+        self._spacing_combo.pack(side="left", padx=(0, 4), pady=8)
+        self._spacing_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _e: (self._apply_spacing_entry(), self._cv.focus_set()),
+        )
+        self._spacing_combo.bind(
+            "<Return>",
+            lambda _e: (self._apply_spacing_entry(), self._cv.focus_set()),
+        )
+        self._spacing_combo.bind("<FocusOut>", lambda _e: self._apply_spacing_entry())
 
         # Final bottom border
         _b3 = tk.Frame(self.root, bg=TC["sep"], height=1)
@@ -2490,8 +2586,27 @@ class KTFigure:
         vsb.pack(side="right", fill="y")
         self._cv.pack(side="left", fill="both", expand=True)
 
-        # Enable mouse wheel scrolling
+        # Enable mouse wheel scrolling (Ctrl+scroll reserved for zoom)
         bind_mousewheel(self._cv, self._cv, "both")
+
+        # Zoom: Ctrl+scroll (all platforms) and macOS pinch gesture
+        self._cv.bind("<Control-MouseWheel>", self._on_zoom_scroll)
+        self._cv.bind(
+            "<Control-Button-4>", self._on_zoom_scroll
+        )  # Linux Ctrl+scroll up
+        self._cv.bind(
+            "<Control-Button-5>", self._on_zoom_scroll
+        )  # Linux Ctrl+scroll down
+        # Pinch-to-zoom (macOS only).
+        # Primary:  ctypes NSEvent local monitor — works with all Tk builds.
+        # Fallback: Tk's <<Magnify>> virtual event — only on Aqua Tk builds that
+        #           compile in gesture support (e.g. python.org Tk, not conda-forge).
+        if sys.platform == "darwin":
+            if not self._setup_macos_pinch_ctypes():
+                try:
+                    self.root.bind("<<Magnify>>", self._on_pinch_zoom)
+                except tk.TclError:
+                    pass
 
         self._cv.configure(
             scrollregion=(0, 0, A4_W + 2 * BOARD_PAD, A4_H + 2 * BOARD_PAD)
@@ -2522,11 +2637,168 @@ class KTFigure:
         self.root.bind("<Delete>", lambda e: self._delete_key())
         self.root.bind("<BackSpace>", lambda e: self._delete_key())
 
+        # Arrow-key nudge — canvas binding suppresses default scroll when an
+        # object is selected; root binding fires whenever focus is elsewhere.
+        def _mk_nudge(dx_mul, dy_mul):
+            return lambda e: self._nudge_selected(
+                dx_mul * self._nudge_step(),
+                dy_mul * self._nudge_step(),
+            )
+
+        for _seq, _dx, _dy in (
+            ("<Up>",          0, -1), ("<Down>",         0,  1),
+            ("<Left>",       -1,  0), ("<Right>",        1,  0),
+            ("<Shift-Up>",    0, -2), ("<Shift-Down>",   0,  2),
+            ("<Shift-Left>", -2,  0), ("<Shift-Right>",  2,  0),
+        ):
+            _h = _mk_nudge(_dx, _dy)
+            self.root.bind(_seq, _h)
+            self._cv.bind(_seq, _h)
+
+        # Zoom keyboard shortcuts — zoom anchored to the canvas centre
+        def _zoom_in(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(self._zoom * ZOOM_STEP, cx, cy)
+
+        def _zoom_out(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(self._zoom / ZOOM_STEP, cx, cy)
+
+        def _zoom_reset(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(1.0, cx, cy)
+
+        self.root.bind(f"<{cmd_key}-equal>", _zoom_in)  # Ctrl/Cmd + =
+        self.root.bind(f"<{cmd_key}-KP_Add>", _zoom_in)  # numpad +
+        self.root.bind(f"<{cmd_key}-minus>", _zoom_out)  # Ctrl/Cmd + -
+        self.root.bind(f"<{cmd_key}-0>", _zoom_reset)  # Ctrl/Cmd + 0
+
         # status bar
         self._status_sep = tk.Frame(self.root, bg=TC["sep"], height=1)
         self._status_sep.pack(side="bottom", fill="x")
+
+        self._status_bar = tk.Frame(self.root, bg=TC["tb"])
+        self._status_bar.pack(side="bottom", fill="x")
+
+        # ── zoom control (bottom-left) ──────────────────────────────────────
+        zoom_frame = tk.Frame(self._status_bar, bg=TC["tb"])
+        zoom_frame.pack(side="left", padx=(8, 4), pady=2)
+
+        self._zoom_var = tk.StringVar(value="100%")
+        _zoom_values = [
+            "25%",
+            "50%",
+            "75%",
+            "100%",
+            "125%",
+            "150%",
+            "200%",
+            "300%",
+            "400%",
+        ]
+        self._zoom_combo = ttk.Combobox(
+            zoom_frame,
+            textvariable=self._zoom_var,
+            values=_zoom_values,
+            width=5,
+            font=("", 9),
+            takefocus=False,
+        )
+        self._zoom_combo.pack(side="left")
+        self._zoom_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _e: (self._apply_zoom_entry(), self._cv.focus_set()),
+        )
+        self._zoom_combo.bind(
+            "<Return>",
+            lambda _e: (self._apply_zoom_entry(), self._cv.focus_set()),
+        )
+        self._zoom_combo.bind("<FocusOut>", lambda _e: self._apply_zoom_entry())
+
+        # Keep these attributes so existing tests and theme code that reference
+        # _btn_zoom_in / _btn_zoom_out / _zoom_entry stay compatible.
+        self._btn_zoom_in = None
+        self._btn_zoom_out = None
+        self._zoom_entry = self._zoom_combo  # alias for backward compat
+
+        # ── center-view button (next to zoom) ──────────────────────────────
+        self._btn_center = tk.Button(
+            zoom_frame,
+            text="⊙",
+            width=2,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 9),
+            command=self._center_view,
+            cursor="arrow",
+        )
+        self._btn_center.pack(side="left", padx=(4, 0))
+
+        # ── artboard controls (bottom-right) ────────────────────────────────
+        ab_right = tk.Frame(self._status_bar, bg=TC["tb"])
+        ab_right.pack(side="right", padx=(4, 8), pady=2)
+
+        self._btn_del_board = tk.Button(
+            ab_right,
+            text="×",
+            width=1,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 7),
+            command=self._delete_artboard,
+            cursor="arrow",
+            state="disabled",
+        )
+        self._btn_del_board.pack(side="right", padx=(1, 0))
+
+        self._btn_add_board = tk.Button(
+            ab_right,
+            text="+",
+            width=1,
+            bd=0,
+            relief="flat",
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+            font=("", 7),
+            command=self._add_artboard,
+            cursor="arrow",
+        )
+        self._btn_add_board.pack(side="right", padx=(1, 2))
+
+        self._board_var = tk.StringVar(value="1")
+        self._board_btn = tk.Button(
+            ab_right,
+            textvariable=self._board_var,
+            width=3,
+            bd=1,
+            relief="solid",
+            bg="white",
+            fg="#1e293b",
+            activebackground="#e2e8f0",
+            font=("", 9),
+            cursor="arrow",
+            command=self._show_board_menu,
+        )
+        self._board_btn.pack(side="right", padx=(0, 4))
+        # Alias keeps existing tests and _apply_theme references intact
+        self._board_combo = self._board_btn
+
+        # Keep reference list for backward compat (tests check len/attributes)
+        self._artboard_tab_btns: list = []
+
+        # ── status label (fills remaining space)
         self._status = tk.Label(
-            self.root,
+            self._status_bar,
             text="Ready — drag on the white A4 board to draw a plot region.",
             bd=0,
             relief="flat",
@@ -2537,7 +2809,7 @@ class KTFigure:
             pady=4,
             font=("", 9),
         )
-        self._status.pack(side="bottom", fill="x")
+        self._status.pack(side="left", fill="x", expand=True)
 
         # Store all themeable widget refs for _apply_theme()
         self._theme_widgets = {
@@ -2551,44 +2823,103 @@ class KTFigure:
         self._apply_theme()
 
     def _draw_artboard(self):
-        ox, oy = BOARD_PAD, BOARD_PAD
-        # drop shadow
-        self._cv.create_rectangle(
-            ox + 5,
-            oy + 5,
-            ox + A4_W + 5,
-            oy + A4_H + 5,
-            fill="#222",
-            outline="",
-            tags="bg",
-        )
-        # white sheet
-        self._cv.create_rectangle(
-            ox,
-            oy,
-            ox + A4_W,
-            oy + A4_H,
-            fill="white",
-            outline="#bbb",
-            width=1,
-            tags="artboard",
-        )
-        # subtle rulers
-        for x in range(0, A4_W + 1, 100):
-            self._cv.create_line(ox + x, oy, ox + x, oy + 8, fill="#ccc", tags="ruler")
-        for y in range(0, A4_H + 1, 100):
-            self._cv.create_line(ox, oy + y, ox + 8, oy + y, fill="#ccc", tags="ruler")
+        """Draw all artboards side-by-side on the canvas."""
+        z = self._zoom
+        oy = BOARD_PAD * z
+        w, h = A4_W * z, A4_H * z
+        for idx in range(len(self._artboards)):
+            ox = self._board_x_origin(idx) * z
+            is_active = idx == self._active_board
+            # drop shadow
+            self._cv.create_rectangle(
+                ox + 5,
+                oy + 5,
+                ox + w + 5,
+                oy + h + 5,
+                fill="#222",
+                outline="",
+                tags="bg",
+            )
+            # white sheet — active board gets blue border
+            border_color = "#3b82f6" if is_active else "#bbb"
+            border_width = 2 if is_active else 1
+            self._cv.create_rectangle(
+                ox,
+                oy,
+                ox + w,
+                oy + h,
+                fill="white",
+                outline=border_color,
+                width=border_width,
+                tags="artboard",
+            )
+            # page label above the artboard
+            label_y = max(oy - max(14, round(16 * z)), 4)
+            self._cv.create_text(
+                ox + w / 2,
+                label_y,
+                text=f"Page {idx + 1}",
+                fill="#888888",
+                font=("", max(7, round(9 * z))),
+                tags="ruler",
+            )
 
     # -----------------------------------------------------------------------
     # Coordinate helpers
     # -----------------------------------------------------------------------
+    def _board_x_origin(self, idx: int) -> float:
+        """Canvas x-coordinate at zoom=1 of the left edge of artboard *idx*."""
+        return BOARD_PAD + idx * (A4_W + BOARD_GAP)
+
+    def _canvas_total_width(self) -> float:
+        """Total canvas width at zoom=1 needed to show all side-by-side artboards."""
+        n = len(self._artboards)
+        return 2 * BOARD_PAD + n * A4_W + max(0, n - 1) * BOARD_GAP
+
+    def _canvas_total_height(self) -> float:
+        """Total canvas height at zoom=1 (fixed: one row of artboards)."""
+        return A4_H + 2 * BOARD_PAD
+
+    def _update_scrollregion(self):
+        """Update the canvas scroll region to cover all artboards at current zoom."""
+        z = self._zoom
+        self._cv.configure(
+            scrollregion=(
+                0,
+                0,
+                self._canvas_total_width() * z,
+                self._canvas_total_height() * z,
+            )
+        )
+
     def _to_board(self, cx, cy):
-        bx = cx - BOARD_PAD
-        by = cy - BOARD_PAD
-        return max(0, min(bx, A4_W)), max(0, min(by, A4_H))
+        z = self._zoom
+        ox = self._board_x_origin(self._active_board)
+        bx = cx / z - ox
+        by = cy / z - BOARD_PAD
+        return bx, by
 
     def _to_canvas(self, bx, by):
-        return bx + BOARD_PAD, by + BOARD_PAD
+        z = self._zoom
+        ox = self._board_x_origin(self._active_board)
+        return (ox + bx) * z, (BOARD_PAD + by) * z
+
+    def _hit_board_idx(self, cx: float, cy: float) -> "int | None":
+        """Return the index of the artboard that contains canvas coords (cx, cy).
+
+        Returns None when the click is not on any artboard.
+        """
+        z = self._zoom
+        oy0 = BOARD_PAD * z
+        oy1 = oy0 + A4_H * z
+        if not (oy0 <= cy <= oy1):
+            return None
+        for i in range(len(self._artboards)):
+            ox0 = self._board_x_origin(i) * z
+            ox1 = ox0 + A4_W * z
+            if ox0 <= cx <= ox1:
+                return i
+        return None
 
     def _ev_board(self, event):
         return self._to_board(self._cv.canvasx(event.x), self._cv.canvasy(event.y))
@@ -2597,43 +2928,80 @@ class KTFigure:
     # Grid / snap helpers
     # -----------------------------------------------------------------------
     def _snap(self, v: float) -> float:
-        """Snap a single board coordinate to the nearest grid line."""
+        """Snap a single board coordinate to the nearest snap-grid line."""
         if not self._snap_to_grid:
             return v
-        return round(v / GRID_SIZE) * GRID_SIZE
+        g = self._snap_grid_size
+        return round(v / g) * g
 
     def _snap_pos(self, bx: float, by: float):
         """Return (bx, by) snapped to the grid (no-op when snap is off)."""
         return self._snap(bx), self._snap(by)
 
     def _draw_grid(self):
-        """Draw grid lines across the artboard.
+        """Draw a three-weight grid across all artboards.
 
-        The artboard is always rendered on a white background regardless of
-        the UI theme, so a fixed light-grey colour is appropriate here.
+        Grid lines are spaced self._grid_size board-pts apart.
+        Every 5th line is drawn in a medium weight and every 10th in a heavy
+        weight.  Levels whose canvas spacing would be less than 3 px are
+        skipped so the canvas never becomes cluttered at low zoom levels.
         """
-        ox, oy = BOARD_PAD, BOARD_PAD
-        for x in range(0, A4_W + 1, GRID_SIZE):
-            self._cv.create_line(
-                ox + x,
-                oy,
-                ox + x,
-                oy + A4_H,
-                fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
-                tags="grid",
-            )
-        for y in range(0, A4_H + 1, GRID_SIZE):
-            self._cv.create_line(
-                ox,
-                oy + y,
-                ox + A4_W,
-                oy + y,
-                fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
-                tags="grid",
-            )
-        # Place grid above the artboard (white sheet) but below blocks/shapes
+        z = self._zoom
+        gs = self._grid_size          # board pts between minor lines
+        oy = BOARD_PAD * z
+
+        minor_px = gs * z             # canvas pixels between minor lines
+        medium_px = gs * 5 * z        # canvas pixels between medium lines
+        major_px = gs * 10 * z        # canvas pixels between major lines
+
+        MIN_PX = 3.0
+        draw_minor  = minor_px  >= MIN_PX
+        draw_medium = medium_px >= MIN_PX
+        draw_major  = major_px  >= MIN_PX
+
+        if not (draw_minor or draw_medium or draw_major):
+            return
+
+        for idx in range(len(self._artboards)):
+            ox = self._board_x_origin(idx) * z
+            w  = A4_W * z
+            h  = A4_H * z
+
+            n_cols = int(A4_W / gs)
+            n_rows = int(A4_H / gs)
+
+            for k in range(n_cols + 1):
+                cx = ox + k * gs * z
+                if k % 10 == 0:
+                    if not draw_major:
+                        continue
+                    color = "#aaaaaa"
+                elif k % 5 == 0:
+                    if not draw_medium:
+                        continue
+                    color = "#cccccc"
+                else:
+                    if not draw_minor:
+                        continue
+                    color = "#e0e0e0"
+                self._cv.create_line(cx, oy, cx, oy + h, fill=color, tags="grid")
+
+            for k in range(n_rows + 1):
+                cy = oy + k * gs * z
+                if k % 10 == 0:
+                    if not draw_major:
+                        continue
+                    color = "#aaaaaa"
+                elif k % 5 == 0:
+                    if not draw_medium:
+                        continue
+                    color = "#cccccc"
+                else:
+                    if not draw_minor:
+                        continue
+                    color = "#e0e0e0"
+                self._cv.create_line(ox, cy, ox + w, cy, fill=color, tags="grid")
+
         self._cv.tag_raise("grid", "artboard")
 
     def _clear_grid(self):
@@ -2671,6 +3039,395 @@ class KTFigure:
             self._btn_snap._set_bg(TC["btn"])
             self._btn_snap._lbl.configure(fg=TC["btn_fg"])
             self._set_status("Snap to grid OFF.")
+
+    def _apply_spacing_entry(self):
+        """Read the shared spacing combobox and apply to both grid and snap."""
+        raw = self._spacing_var.get().strip()
+        # Strip optional "pt" unit suffix
+        if raw.endswith(" pt"):
+            raw = raw[:-3].strip()
+        elif raw.endswith("pt"):
+            raw = raw[:-2].strip()
+        try:
+            val = float(raw)
+        except ValueError:
+            v = self._grid_size
+            self._spacing_var.set(f"{int(v)} pt" if v == int(v) else f"{v} pt")
+            return
+        if val <= 0:
+            v = self._grid_size
+            self._spacing_var.set(f"{int(v)} pt" if v == int(v) else f"{v} pt")
+            return
+        self._grid_size = val
+        self._snap_grid_size = val
+        display = f"{int(val)} pt" if val == int(val) else f"{val} pt"
+        self._spacing_var.set(display)
+        if self._show_grid:
+            self._clear_grid()
+            self._draw_grid()
+        self._set_status(f"Grid/snap spacing set to {display}.")
+
+    def _nudge_step(self) -> float:
+        """Step size for arrow-key nudging — always the shared spacing value."""
+        return self._snap_grid_size
+
+    def _nudge_selected(self, dx: float, dy: float):
+        """Move every selected object by (dx, dy) board pts and redraw.
+
+        When snap is on the leading edge is aligned to its nearest grid line
+        first, then advanced by |dx|/|dy| — identical to the drag behaviour.
+        Returns "break" so the canvas arrow-key scroll is suppressed.
+        """
+        focused = self.root.focus_get()
+        if focused is not None and focused.winfo_class() in (
+            "Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox",
+        ):
+            return None
+        if not self._selected_objects:
+            return None
+        for obj in self._selected_objects:
+            w = obj.x2 - obj.x1
+            h = obj.y2 - obj.y1
+            if self._snap_to_grid:
+                g = self._snap_grid_size
+                # Horizontal — snap the leading edge, then advance by |dx|
+                if dx > 0:
+                    new_x1 = math.floor(obj.x2 / g) * g + dx - w
+                elif dx < 0:
+                    new_x1 = math.ceil(obj.x1 / g) * g + dx   # dx is negative
+                else:
+                    new_x1 = obj.x1
+                # Vertical — same pattern
+                if dy > 0:
+                    new_y1 = math.floor(obj.y2 / g) * g + dy - h
+                elif dy < 0:
+                    new_y1 = math.ceil(obj.y1 / g) * g + dy   # dy is negative
+                else:
+                    new_y1 = obj.y1
+            else:
+                new_x1 = obj.x1 + dx
+                new_y1 = obj.y1 + dy
+            obj.x1 = new_x1
+            obj.y1 = new_y1
+            obj.x2 = obj.x1 + w
+            obj.y2 = obj.y1 + h
+            if isinstance(obj, PlotBlock):
+                cx1, cy1 = self._to_canvas(obj.x1, obj.y1)
+                cx2, cy2 = self._to_canvas(obj.x2, obj.y2)
+                if obj.rect_id:
+                    self._cv.coords(obj.rect_id, cx1, cy1, cx2, cy2)
+                if obj.image_id:
+                    self._cv.coords(obj.image_id, cx1, cy1)
+                if obj.label_id:
+                    self._cv.coords(obj.label_id, (cx1 + cx2) / 2, (cy1 + cy2) / 2)
+            elif isinstance(obj, Shape):
+                self._draw_shape(obj)
+            elif isinstance(obj, TextObject):
+                self._draw_text(obj)
+        self._clear_all_handles()
+        for obj in self._selected_objects:
+            if isinstance(obj, PlotBlock):
+                self._draw_handles(obj, clear_first=False)
+            elif isinstance(obj, Shape):
+                self._draw_handles_shape(obj, clear_first=False)
+            elif isinstance(obj, TextObject):
+                self._draw_handles_text(obj, clear_first=False)
+        return "break"
+
+    # -----------------------------------------------------------------------
+    # Zoom helpers
+    # -----------------------------------------------------------------------
+    _ZOOM_STEPS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
+
+    def _set_zoom(self, factor: float, cx: float = None, cy: float = None):
+        """Apply *factor* as the new zoom level and redraw everything.
+
+        If *cx* and *cy* are given (canvas **widget** pixel coordinates of the
+        cursor), the scroll position is adjusted after the zoom so that the
+        same canvas point remains visually under the cursor — i.e. the view
+        zooms in/out towards the pointer rather than towards the origin.
+        """
+        factor = max(0.1, min(10.0, factor))
+
+        # --- capture the canvas-space point under the cursor (pre-zoom) ------
+        # xview()[0] * old_sr_width gives the canvas x at widget pixel 0
+        # (i.e. the scroll offset).  Adding cx gives the canvas x under the
+        # cursor.  Dividing by old zoom converts to zoom-independent board space.
+        pivot_bx = pivot_by = None
+        if cx is not None and cy is not None:
+            old_z = self._zoom
+            old_sr_w = self._canvas_total_width() * old_z
+            old_sr_h = self._canvas_total_height() * old_z
+            pivot_bx = self._cv.xview()[0] * old_sr_w + cx
+            pivot_by = self._cv.yview()[0] * old_sr_h + cy
+            # Convert canvas coords to zoom-independent board coords
+            pivot_bx /= old_z
+            pivot_by /= old_z
+
+        self._zoom = factor
+        pct = round(factor * 100)
+        self._zoom_var.set(f"{pct}%")
+        # Update scrollregion to cover all artboards at new zoom
+        self._update_scrollregion()
+        # Full redraw with new zoom (_redraw_all draws the grid internally)
+        self._cv.delete("all")
+        self._draw_artboard()
+        self._redraw_all()
+
+        # --- re-scroll so the pivot point stays under the cursor (post-zoom) -
+        # The board-space pivot maps to canvas coordinate pivot_bx * new_zoom.
+        # We want that canvas coordinate to sit at widget pixel cx, meaning
+        # the viewport left edge in canvas space should be:
+        #   viewport_left = pivot_bx * new_zoom - cx
+        # Expressed as an xview fraction of the new scrollregion:
+        #   fraction = viewport_left / (total_canvas_width * new_zoom)
+        # We compute the scrollregion size directly (avoids cget() parsing
+        # which returns a tuple on some Tk versions, breaking float() parsing).
+        if pivot_bx is not None:
+            new_sr_w = self._canvas_total_width() * factor
+            new_sr_h = self._canvas_total_height() * factor
+            if new_sr_w > 0:
+                target_x = pivot_bx * factor - cx
+                self._cv.xview_moveto(max(0.0, min(1.0, target_x / new_sr_w)))
+            if new_sr_h > 0:
+                target_y = pivot_by * factor - cy
+                self._cv.yview_moveto(max(0.0, min(1.0, target_y / new_sr_h)))
+
+    def _zoom_in(self, cx: float = None, cy: float = None):
+        """Step zoom up to the next preset level.
+
+        *cx*, *cy* are optional canvas widget pixel coordinates of the cursor;
+        when provided the view zooms towards that point (see ``_set_zoom``).
+        """
+        steps = self._ZOOM_STEPS
+        for s in steps:
+            if s > self._zoom + 0.01:
+                self._set_zoom(s, cx, cy)
+                return
+        self._set_zoom(steps[-1], cx, cy)
+
+    def _zoom_out(self, cx: float = None, cy: float = None):
+        """Step zoom down to the previous preset level.
+
+        *cx*, *cy* are optional canvas widget pixel coordinates of the cursor;
+        when provided the view zooms towards that point (see ``_set_zoom``).
+        """
+        steps = self._ZOOM_STEPS
+        for s in reversed(steps):
+            if s < self._zoom - 0.01:
+                self._set_zoom(s, cx, cy)
+                return
+        self._set_zoom(steps[0], cx, cy)
+
+    def _apply_zoom_entry(self):
+        """Read the zoom combobox and apply; silently ignore empty/invalid values."""
+        raw = self._zoom_var.get().strip().rstrip("%")
+        try:
+            pct = float(raw)
+        except ValueError:
+            self._zoom_var.set(f"{round(self._zoom * 100)}%")
+            return
+        if pct <= 0:
+            self._zoom_var.set(f"{round(self._zoom * 100)}%")
+            return
+        # Zoom first, then center the view on the active artboard.
+        # Using _center_view() rather than a cursor anchor handles both zoom-in
+        # (artboard larger than viewport) and zoom-out (artboard fits with room
+        # to spare) correctly — the anchor approach clamps to 0 when target_x
+        # is negative, which pins the artboard to the top-left corner.
+        self._set_zoom(pct / 100.0)
+        self._center_view()
+
+    # -----------------------------------------------------------------------
+    # Center-view helper
+    # -----------------------------------------------------------------------
+    def _center_view(self):
+        """Scroll the canvas so the active artboard is centered in the viewport."""
+        self._cv.update_idletasks()
+        canvas_w = self._cv.winfo_width()
+        canvas_h = self._cv.winfo_height()
+        z = self._zoom
+        # Center of the active artboard in canvas coordinates (at current zoom)
+        artboard_cx = (self._board_x_origin(self._active_board) + A4_W / 2) * z
+        artboard_cy = (BOARD_PAD + A4_H / 2) * z
+        # Ideal top-left corner of the viewport (in canvas coordinates) to center
+        target_x = artboard_cx - canvas_w / 2
+        target_y = artboard_cy - canvas_h / 2
+        # Normal content bounding box (canvas coords at current zoom)
+        content_w = self._canvas_total_width() * z
+        content_h = self._canvas_total_height() * z
+        # Expand the scrollregion if the ideal viewport position would fall outside
+        # it — this ensures xview_moveto/yview_moveto can actually reach the target.
+        # Negative sr_x0/sr_y0 lets us scroll to expose empty canvas to the
+        # left/top of the content (which is drawn at absolute coordinate (0,0)+).
+        sr_x0 = min(0.0, target_x)
+        sr_y0 = min(0.0, target_y)
+        sr_x1 = max(content_w, target_x + canvas_w)
+        sr_y1 = max(content_h, target_y + canvas_h)
+        self._cv.configure(scrollregion=(sr_x0, sr_y0, sr_x1, sr_y1))
+        # Scroll fraction within the (possibly expanded) scrollregion
+        total_w = sr_x1 - sr_x0
+        total_h = sr_y1 - sr_y0
+        xfrac = (target_x - sr_x0) / total_w if total_w > 0 else 0.0
+        yfrac = (target_y - sr_y0) / total_h if total_h > 0 else 0.0
+        self._cv.xview_moveto(max(0.0, min(1.0, xfrac)))
+        self._cv.yview_moveto(max(0.0, min(1.0, yfrac)))
+        self._set_status("View centered on artboard.")
+
+    # -----------------------------------------------------------------------
+    # Multi-artboard helpers
+    # -----------------------------------------------------------------------
+    def _sync_artboard(self):
+        """Write current _blocks/_shapes/_texts back to the active artboard entry.
+
+        Must be called whenever these lists are replaced (e.g. after undo/redo).
+        """
+        ab = self._artboards[self._active_board]
+        ab["blocks"] = self._blocks
+        ab["shapes"] = self._shapes
+        ab["texts"] = self._texts
+        ab["undo_stack"] = self._undo_stack
+        ab["redo_stack"] = self._redo_stack
+
+    def _rebuild_artboard_buttons(self):
+        """Update the artboard page-selector button to reflect the current artboards list.
+
+        Kept as the canonical 'refresh artboard UI' method so all callers work
+        unchanged.  The old per-button list ``_artboard_tab_btns`` is also
+        updated for backward compatibility with existing tests.
+        """
+        values = [str(i + 1) for i in range(len(self._artboards))]
+        # Update the StringVar so the button label shows the active page.
+        self._board_var.set(str(self._active_board + 1))
+        # Keep legacy list in sync: one dummy entry per artboard, length is
+        # what tests check.
+        self._artboard_tab_btns = values
+        # Enable delete button only when more than one artboard exists
+        self._btn_del_board.configure(
+            state="normal" if len(self._artboards) > 1 else "disabled"
+        )
+
+    def _show_board_menu(self):
+        """Show a popup menu listing all artboard pages, positioned ABOVE the button."""
+        n = len(self._artboards)
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
+        menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            font=("", 9),
+            bg=TC["btn"],
+            fg=TC["btn_fg"],
+            activebackground="#3b82f6",
+            activeforeground="white",
+        )
+        for i in range(n):
+            menu.add_command(
+                label=str(i + 1),
+                command=lambda idx=i: self._switch_artboard(idx),
+            )
+        self._board_btn.update_idletasks()
+        # Estimate menu height: ~20px per item + small top/bottom border
+        _MENU_ITEM_H = 20
+        _MENU_BORDER_H = 6
+        approx_h = n * _MENU_ITEM_H + _MENU_BORDER_H
+        x = self._board_btn.winfo_rootx()
+        y = self._board_btn.winfo_rooty() - approx_h
+        menu.post(x, max(0, y))
+
+    def _switch_artboard(self, idx: int):
+        """Save current artboard state and switch to artboard *idx*."""
+        if idx == self._active_board:
+            return
+        # Save current state into the artboard dict
+        self._sync_artboard()
+        self._clear_artboard_selection()
+        # Switch
+        self._active_board = idx
+        ab = self._artboards[idx]
+        self._blocks = ab["blocks"]
+        self._shapes = ab["shapes"]
+        self._texts = ab["texts"]
+        self._undo_stack = ab["undo_stack"]
+        self._redo_stack = ab["redo_stack"]
+        # All boards stay on-screen; just refresh the artboard borders and grid.
+        self._cv.delete("bg", "artboard", "ruler")
+        self._draw_artboard()
+        self._clear_grid()
+        if self._show_grid:
+            self._draw_grid()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._center_view()
+        self._set_status(f"Switched to Page {idx + 1}.")
+
+    def _add_artboard(self):
+        """Add a new blank artboard and switch to it."""
+        self._sync_artboard()
+        new_ab = {
+            "blocks": [],
+            "shapes": [],
+            "texts": [],
+            "undo_stack": [],
+            "redo_stack": [],
+        }
+        self._artboards.append(new_ab)
+        idx = len(self._artboards) - 1
+        self._active_board = idx
+        self._blocks = new_ab["blocks"]
+        self._shapes = new_ab["shapes"]
+        self._texts = new_ab["texts"]
+        self._undo_stack = new_ab["undo_stack"]
+        self._redo_stack = new_ab["redo_stack"]
+        self._clear_artboard_selection()
+        # Expand the scroll region and redraw all artboard backgrounds.
+        self._update_scrollregion()
+        self._cv.delete("bg", "artboard", "ruler")
+        self._draw_artboard()
+        self._redraw_all()
+        self._clear_grid()
+        if self._show_grid:
+            self._draw_grid()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._set_status(f"Added Page {idx + 1}.")
+
+    def _delete_artboard(self):
+        """Delete the current artboard (not allowed when only one exists)."""
+        if len(self._artboards) <= 1:
+            self._set_status("Cannot delete the last page.")
+            return
+        idx = self._active_board
+        self._artboards.pop(idx)
+        new_idx = max(0, idx - 1)
+        self._active_board = new_idx
+        ab = self._artboards[new_idx]
+        self._blocks = ab["blocks"]
+        self._shapes = ab["shapes"]
+        self._texts = ab["texts"]
+        self._undo_stack = ab["undo_stack"]
+        self._redo_stack = ab["redo_stack"]
+        self._clear_artboard_selection()
+        # Full redraw: artboard positions shift when a board is deleted.
+        self._update_scrollregion()
+        self._cv.delete("all")
+        self._draw_artboard()
+        self._redraw_all()
+        self._aes.clear()
+        self._aes.clear_shape_properties()
+        self._rebuild_artboard_buttons()
+        self._set_status(f"Deleted page. Now on Page {new_idx + 1}.")
+
+    def _clear_artboard_selection(self):
+        """Reset all selection and transient drag state when switching pages."""
+        self._selected = None
+        self._selected_shape = None
+        self._selected_text = None
+        self._selected_objects = []
+        self._resize_handles = []
+        self._drag_start = None
+        self._rubber_rect = None
 
     def _block_at(self, bx, by, pad=0):
         for b in reversed(self._blocks):
@@ -3267,6 +4024,32 @@ class KTFigure:
         # Status bar
         self._status.configure(bg=TC["tb"], fg=TC["status_fg"])
         self._status_sep.configure(bg=TC["sep"])
+        self._status_bar.configure(bg=TC["tb"])
+
+        # Zoom controls – the old separate buttons no longer exist; only the
+        # combobox, its container frame, and the center button need theming.
+        self._zoom_combo.master.configure(bg=TC["tb"])
+
+        # Center-view button
+        self._btn_center.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+
+        # Artboard controls
+        self._btn_add_board.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        self._btn_del_board.configure(
+            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
+        )
+        # _board_btn is a plain tk.Button styled to look like a combobox
+        self._board_btn.configure(
+            bg="white" if not self._is_dark else "#3c3c3c",
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
+        )
+        self._board_btn.master.configure(bg=TC["tb"])
+        self._rebuild_artboard_buttons()
 
         # Canvas outer frame and canvas itself
         self._canvas_outer.configure(bg=TC["canvas"])
@@ -3592,6 +4375,7 @@ class KTFigure:
     # Mouse events
     # -----------------------------------------------------------------------
     def _mouse_down(self, event):
+        self._cv.focus_set()   # reclaim keyboard focus from any toolbar widget
         bx, by = self._ev_board(event)
 
         # Handle text mode click
@@ -3653,6 +4437,12 @@ class KTFigure:
         else:
             cx = self._cv.canvasx(event.x)
             cy = self._cv.canvasy(event.y)
+            # Auto-switch to the artboard under the cursor (works at any zoom level)
+            hit_idx = self._hit_board_idx(cx, cy)
+            if hit_idx is not None and hit_idx != self._active_board:
+                self._switch_artboard(hit_idx)
+                # Recompute board coords relative to the newly active artboard
+                bx, by = self._ev_board(event)
             # Check if clicking on a resize handle
             for item in self._cv.find_overlapping(cx - 6, cy - 6, cx + 6, cy + 6):
                 tags = self._cv.gettags(item)
@@ -3805,6 +4595,7 @@ class KTFigure:
                             elif isinstance(prev_obj, TextObject):
                                 self._unhighlight_text(prev_obj)
                         self._selected_objects = [obj]
+                        self._drag_move_start = (bx, by)  # for direction-based snap
                         if block:
                             self._drag_block = block
                             self._drag_offset = (bx - block.x1, by - block.y1)
@@ -3943,12 +4734,6 @@ class KTFigure:
                 obj.x2 = obj.x1 + w
                 obj.y2 = obj.y1 + h
 
-                # Constrain to bounds
-                obj.x1 = max(0, min(obj.x1, A4_W - w))
-                obj.y1 = max(0, min(obj.y1, A4_H - h))
-                obj.x2 = obj.x1 + w
-                obj.y2 = obj.y1 + h
-
                 # Update canvas
                 if isinstance(obj, PlotBlock):
                     cx1, cy1 = self._to_canvas(obj.x1, obj.y1)
@@ -3978,16 +4763,32 @@ class KTFigure:
             bx, by = self._ev_board(event)
             s = self._drag_shape
             offset_x, offset_y = self._drag_offset
-
-            # Calculate new position (snap top-left corner to grid)
-            new_x1 = self._snap(bx - offset_x)
-            new_y1 = self._snap(by - offset_y)
             w = s.x2 - s.x1
             h = s.y2 - s.y1
 
-            # Constrain to artboard bounds
-            new_x1 = max(0, min(new_x1, A4_W - w))
-            new_y1 = max(0, min(new_y1, A4_H - h))
+            # Direction-aware snap: leading edge snaps forward, never backward
+            start_bx, start_by = getattr(self, "_drag_move_start", (bx, by))
+            raw_x1 = bx - offset_x
+            raw_y1 = by - offset_y
+            if self._snap_to_grid:
+                g = self._snap_grid_size
+                dx_dir = bx - start_bx
+                dy_dir = by - start_by
+                if dx_dir > 0:    # moving right → ceil the right edge
+                    new_x1 = math.ceil((raw_x1 + w) / g) * g - w
+                elif dx_dir < 0:  # moving left → floor the left edge
+                    new_x1 = math.floor(raw_x1 / g) * g
+                else:
+                    new_x1 = round(raw_x1 / g) * g
+                if dy_dir > 0:    # moving down → ceil the bottom edge
+                    new_y1 = math.ceil((raw_y1 + h) / g) * g - h
+                elif dy_dir < 0:  # moving up → floor the top edge
+                    new_y1 = math.floor(raw_y1 / g) * g
+                else:
+                    new_y1 = round(raw_y1 / g) * g
+            else:
+                new_x1 = raw_x1
+                new_y1 = raw_y1
 
             # Update shape coordinates
             s.x1 = new_x1
@@ -4005,16 +4806,32 @@ class KTFigure:
             bx, by = self._ev_board(event)
             b = self._drag_block
             offset_x, offset_y = self._drag_offset
-
-            # Calculate new position (snap top-left corner to grid)
-            new_x1 = self._snap(bx - offset_x)
-            new_y1 = self._snap(by - offset_y)
             w = b.x2 - b.x1
             h = b.y2 - b.y1
 
-            # Constrain to artboard bounds
-            new_x1 = max(0, min(new_x1, A4_W - w))
-            new_y1 = max(0, min(new_y1, A4_H - h))
+            # Direction-aware snap: leading edge snaps forward, never backward
+            start_bx, start_by = getattr(self, "_drag_move_start", (bx, by))
+            raw_x1 = bx - offset_x
+            raw_y1 = by - offset_y
+            if self._snap_to_grid:
+                g = self._snap_grid_size
+                dx_dir = bx - start_bx
+                dy_dir = by - start_by
+                if dx_dir > 0:    # moving right → ceil the right edge
+                    new_x1 = math.ceil((raw_x1 + w) / g) * g - w
+                elif dx_dir < 0:  # moving left → floor the left edge
+                    new_x1 = math.floor(raw_x1 / g) * g
+                else:
+                    new_x1 = round(raw_x1 / g) * g
+                if dy_dir > 0:    # moving down → ceil the bottom edge
+                    new_y1 = math.ceil((raw_y1 + h) / g) * g - h
+                elif dy_dir < 0:  # moving up → floor the top edge
+                    new_y1 = math.floor(raw_y1 / g) * g
+                else:
+                    new_y1 = round(raw_y1 / g) * g
+            else:
+                new_x1 = raw_x1
+                new_y1 = raw_y1
 
             # Update block coordinates
             b.x1 = new_x1
@@ -4039,16 +4856,32 @@ class KTFigure:
             bx, by = self._ev_board(event)
             t = self._drag_text
             offset_x, offset_y = self._drag_offset
-
-            # Calculate new position (snap top-left corner to grid)
-            new_x1 = self._snap(bx - offset_x)
-            new_y1 = self._snap(by - offset_y)
             w = t.x2 - t.x1
             h = t.y2 - t.y1
 
-            # Constrain to artboard bounds
-            new_x1 = max(0, min(new_x1, A4_W - w))
-            new_y1 = max(0, min(new_y1, A4_H - h))
+            # Direction-aware snap: leading edge snaps forward, never backward
+            start_bx, start_by = getattr(self, "_drag_move_start", (bx, by))
+            raw_x1 = bx - offset_x
+            raw_y1 = by - offset_y
+            if self._snap_to_grid:
+                g = self._snap_grid_size
+                dx_dir = bx - start_bx
+                dy_dir = by - start_by
+                if dx_dir > 0:    # moving right → ceil the right edge
+                    new_x1 = math.ceil((raw_x1 + w) / g) * g - w
+                elif dx_dir < 0:  # moving left → floor the left edge
+                    new_x1 = math.floor(raw_x1 / g) * g
+                else:
+                    new_x1 = round(raw_x1 / g) * g
+                if dy_dir > 0:    # moving down → ceil the bottom edge
+                    new_y1 = math.ceil((raw_y1 + h) / g) * g - h
+                elif dy_dir < 0:  # moving up → floor the top edge
+                    new_y1 = math.floor(raw_y1 / g) * g
+                else:
+                    new_y1 = round(raw_y1 / g) * g
+            else:
+                new_x1 = raw_x1
+                new_y1 = raw_y1
 
             # Update text coordinates
             t.x1 = new_x1
@@ -4204,11 +5037,11 @@ class KTFigure:
 
                 # Update the endpoint
                 if move_endpoint1:
-                    obj.x1 = max(0, min(A4_W, bx))
-                    obj.y1 = max(0, min(A4_H, by))
+                    obj.x1 = bx
+                    obj.y1 = by
                 else:
-                    obj.x2 = max(0, min(A4_W, bx))
-                    obj.y2 = max(0, min(A4_H, by))
+                    obj.x2 = bx
+                    obj.y2 = by
 
                 # Update display
                 self._draw_shape(self._resize_shape)
@@ -4246,13 +5079,13 @@ class KTFigure:
             else:
                 # Normal non-proportional resizing
                 if "n" in c:
-                    obj.y1 = max(0, min(by, obj.y2 - MIN))
+                    obj.y1 = min(by, obj.y2 - MIN)
                 if "s" in c:
-                    obj.y2 = min(A4_H, max(by, obj.y1 + MIN))
+                    obj.y2 = max(by, obj.y1 + MIN)
                 if "w" in c:
-                    obj.x1 = max(0, min(bx, obj.x2 - MIN))
+                    obj.x1 = min(bx, obj.x2 - MIN)
                 if "e" in c:
-                    obj.x2 = min(A4_W, max(bx, obj.x1 + MIN))
+                    obj.x2 = max(bx, obj.x1 + MIN)
 
             # Update display
             if self._resize_block:
@@ -4279,13 +5112,13 @@ class KTFigure:
 
             # Normal non-proportional resizing
             if "n" in c:
-                obj.y1 = max(0, min(by, obj.y2 - MIN))
+                obj.y1 = min(by, obj.y2 - MIN)
             if "s" in c:
-                obj.y2 = min(A4_H, max(by, obj.y1 + MIN))
+                obj.y2 = max(by, obj.y1 + MIN)
             if "w" in c:
-                obj.x1 = max(0, min(bx, obj.x2 - MIN))
+                obj.x1 = min(bx, obj.x2 - MIN)
             if "e" in c:
-                obj.x2 = min(A4_W, max(bx, obj.x1 + MIN))
+                obj.x2 = max(bx, obj.x1 + MIN)
 
             # Scale font size proportionally with the height change
             orig_dims = getattr(self, "_resize_orig_dims", None)
@@ -4376,10 +5209,6 @@ class KTFigure:
                 w, h = 80, 30  # Default text box size
                 x1, y1 = sx, by
                 x2, y2 = x1 + w, y1 + h
-
-                # Constrain to board
-                x2 = min(x2, A4_W)
-                y2 = min(y2, A4_H)
 
                 self._save_state()
                 text_obj = TextObject(x1, y1, "")
@@ -4618,6 +5447,7 @@ class KTFigure:
                 self._shapes.append(shape)
                 self._draw_shape(shape)
                 self._select_shape(shape)
+                self._selected_objects = [shape]
                 self._mode_select()
             elif self._mode == "draw_rect":
                 self._save_state()  # Save before creating
@@ -4627,6 +5457,7 @@ class KTFigure:
                 self._shapes.append(shape)
                 self._draw_shape(shape)
                 self._select_shape(shape)
+                self._selected_objects = [shape]
                 self._mode_select()
             elif self._mode == "draw_circle":
                 self._save_state()  # Save before creating
@@ -4636,6 +5467,7 @@ class KTFigure:
                 self._shapes.append(shape)
                 self._draw_shape(shape)
                 self._select_shape(shape)
+                self._selected_objects = [shape]
                 self._mode_select()
             return
 
@@ -4741,6 +5573,10 @@ class KTFigure:
 
         _, _, pil_img = fig_to_photoimage(fig)
         plt.close(fig)
+
+        # Store the untouched matplotlib render so _redraw_at_zoom can rescale
+        # it quickly without re-running the full matplotlib pipeline.
+        block._pil_img_base = pil_img
 
         cx1, cy1 = self._to_canvas(block.x1, block.y1)
         cx2, cy2 = self._to_canvas(block.x2, block.y2)
@@ -4942,73 +5778,18 @@ class KTFigure:
             return
         self._open_config(self._selected, is_edit=True)
 
-    def _delete_selected(self):
-        # Delete selected plot block (with confirmation)
-        if self._selected:
-            b = self._selected
-            if not messagebox.askyesno(
-                "Delete block", f"Remove Plot {b.bid}?", parent=self.root
-            ):
-                return
-            self._save_state()
-            for item in (b.rect_id, b.image_id, b.label_id):
-                if item:
-                    self._cv.delete(item)
-            self._blocks.remove(b)
-            if self._guide_object is b:
-                self._guide_object = None
-            self._selected = None
-            self._aes.clear()
-            self._set_status("Block deleted.")
-            return
-
-        # Delete selected shape (with confirmation)
-        if self._selected_shape:
-            s = self._selected_shape
-            if not messagebox.askyesno(
-                "Delete shape", f"Remove Shape {s.sid}?", parent=self.root
-            ):
-                return
-            self._save_state()
-            if s.item_id:
-                self._cv.delete(s.item_id)
-            self._shapes.remove(s)
-            if self._guide_object is s:
-                self._guide_object = None
-            self._selected_shape = None
-            self._aes.clear_shape_properties()
-            self._clear_handles()
-            self._set_status("Shape deleted.")
-            return
-
-        # Delete selected text object (with confirmation)
-        if self._selected_text:
-            t = self._selected_text
-            if not messagebox.askyesno(
-                "Delete text", f"Remove Text {t.tid}?", parent=self.root
-            ):
-                return
-            self._save_state()
-            if t.item_id:
-                self._cv.delete(t.item_id)
-            self._texts.remove(t)
-            if self._guide_object is t:
-                self._guide_object = None
-            self._selected_text = None
-            self._aes.clear_shape_properties()
-            self._clear_handles()
-            self._set_status("Text deleted.")
-            return
-
-        self._set_status("Nothing selected to delete.")
-
     def _delete_key(self):
         """Delete key handler - no confirmation dialog."""
         # If focus is inside a text-entry widget (Entry, Spinbox, Text), let
         # the widget handle the keystroke normally instead of deleting an object.
         focused = self.root.focus_get()
         if focused is not None and focused.winfo_class() in (
-            "Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox"
+            "Entry",
+            "Text",
+            "Spinbox",
+            "TEntry",
+            "TSpinbox",
+            "TCombobox",
         ):
             return
 
@@ -5119,6 +5900,9 @@ class KTFigure:
         self._shapes = copy.deepcopy(state["shapes"])
         self._texts = copy.deepcopy(state.get("texts", []))
 
+        # Sync new lists back into the active artboard entry
+        self._sync_artboard()
+
         # Clear selections
         self._selected = None
         self._selected_shape = None
@@ -5151,6 +5935,9 @@ class KTFigure:
         self._shapes = copy.deepcopy(state["shapes"])
         self._texts = copy.deepcopy(state.get("texts", []))
 
+        # Sync new lists back into the active artboard entry
+        self._sync_artboard()
+
         # Clear selections
         self._selected = None
         self._selected_shape = None
@@ -5164,40 +5951,388 @@ class KTFigure:
         self._set_status("Redo successful.")
 
     def _redraw_all(self):
-        """Redraw all blocks and shapes after undo/redo."""
-        # Clear canvas except background
+        """Redraw all artboards' objects after undo/redo or a full refresh."""
+        # Clear canvas items that are NOT part of the artboard backgrounds.
         for item in self._cv.find_all():
             tags = self._cv.gettags(item)
             if "bg" not in tags and "artboard" not in tags and "ruler" not in tags:
                 self._cv.delete(item)
 
-        # Reset IDs
+        # Draw each artboard's objects, temporarily making it the active board
+        # so that _to_canvas uses the correct x-offset for each board.
+        # _active_board is restored to saved_active after the loop.
+        saved_active = self._active_board
+        for i, ab in enumerate(self._artboards):
+            self._active_board = i
+            blocks = ab["blocks"]
+            shapes = ab["shapes"]
+            texts = ab["texts"]
+
+            # Reset canvas IDs (they will be reassigned when redrawn)
+            for block in blocks:
+                block.rect_id = None
+                block.image_id = None
+                block.label_id = None
+                block._pil_img = None
+            for shape in shapes:
+                shape.item_id = None
+            for text in texts:
+                text.item_id = None
+
+            # Redraw
+            for block in blocks:
+                if block.df is not None:
+                    self._render_block(block)
+                else:
+                    self._draw_empty_block(block)
+            for shape in shapes:
+                self._draw_shape(shape)
+            for text in texts:
+                self._draw_text(text)
+
+        # Restore the saved active board
+        self._active_board = saved_active
+        self._blocks = self._artboards[saved_active]["blocks"]
+        self._shapes = self._artboards[saved_active]["shapes"]
+        self._texts = self._artboards[saved_active]["texts"]
+
+        if self._show_grid:
+            self._draw_grid()
+
+    # -----------------------------------------------------------------------
+    # Zoom
+    # -----------------------------------------------------------------------
+
+    def _apply_zoom(self, new_zoom: float, event_x: int, event_y: int):
+        """Change the canvas zoom level, keeping the canvas point under
+        (event_x, event_y) fixed under the cursor.
+
+        Args:
+            new_zoom:  Desired zoom level (will be clamped to [ZOOM_MIN, ZOOM_MAX]).
+            event_x:   Widget-relative X of the anchor point (e.g. event.x).
+            event_y:   Widget-relative Y of the anchor point (e.g. event.y).
+        """
+        new_zoom = max(ZOOM_MIN, min(ZOOM_MAX, new_zoom))
+        if abs(new_zoom - self._zoom) < 1e-9:
+            return
+
+        ratio = new_zoom / self._zoom
+
+        # Canvas coordinates of the anchor point before the zoom change.
+        # canvasx/canvasy convert widget coords → canvas coords (accounting for scroll).
+        mc_x = self._cv.canvasx(event_x)
+        mc_y = self._cv.canvasy(event_y)
+
+        # Current scroll offset: the canvas coord visible at the widget's top-left.
+        sx = self._cv.canvasx(0)
+        sy = self._cv.canvasy(0)
+
+        # Apply new zoom
+        self._zoom = new_zoom
+        total_w = self._canvas_total_width() * new_zoom
+        total_h = self._canvas_total_height() * new_zoom
+        self._cv.configure(scrollregion=(0, 0, total_w, total_h))
+
+        # Redraw everything at the new zoom level
+        self._redraw_at_zoom()
+
+        # Scroll so that the canvas point that was under the cursor stays there.
+        # All canvas coordinates scale uniformly from the origin (0, 0), so the
+        # new canvas coord of the anchor is simply mc_x * ratio.
+        # new scroll offset = mc_x * ratio - widget_x = mc_x * (ratio - 1) + sx
+        new_sx = mc_x * (ratio - 1) + sx
+        new_sy = mc_y * (ratio - 1) + sy
+        self._cv.xview_moveto(max(0.0, min(1.0, new_sx / total_w)))
+        self._cv.yview_moveto(max(0.0, min(1.0, new_sy / total_h)))
+
+        self._set_status(f"Zoom: {int(new_zoom * 100)}%  —  Ctrl+0 to reset")
+
+    def _redraw_at_zoom(self):
+        """Fully redraw all canvas content at the current zoom level.
+
+        Used both by _apply_zoom (zoom change) and _redraw_all (undo/redo).
+        Blocks that have a cached base PIL image are rescaled without re-running
+        matplotlib; only uncached blocks trigger a full re-render.
+        """
+        # Clear the entire canvas
+        self._cv.delete("all")
+
+        # Reset canvas item IDs so they are re-created below
         for block in self._blocks:
             block.rect_id = None
             block.image_id = None
             block.label_id = None
-            block._pil_img = None
-
         for shape in self._shapes:
             shape.item_id = None
+        for text_obj in self._texts:
+            text_obj.item_id = None
+        self._resize_handles = []
 
-        for text in self._texts:
-            text.item_id = None
+        # Background and artboard
+        self._draw_artboard()
 
-        # Redraw blocks
+        # Grid overlay (if enabled)
+        if self._show_grid:
+            self._draw_grid()
+
+        # Blocks
         for block in self._blocks:
-            if block.df is not None:
+            if block._pil_img_base is not None:
+                # Fast path: rescale the stored matplotlib render to the new size
+                cx1, cy1 = self._to_canvas(block.x1, block.y1)
+                cx2, cy2 = self._to_canvas(block.x2, block.y2)
+                target_w = max(1, int(cx2 - cx1))
+                target_h = max(1, int(cy2 - cy1))
+                from PIL import Image as _PILImage, ImageTk as _ImageTk
+
+                pil_img = block._pil_img_base.resize(
+                    (target_w, target_h), _PILImage.LANCZOS
+                )
+                photo = _ImageTk.PhotoImage(pil_img)
+                block._photo = photo
+
+                # Create the placeholder rect (hidden outline; shown when selected)
+                block.rect_id = self._cv.create_rectangle(
+                    cx1,
+                    cy1,
+                    cx2,
+                    cy2,
+                    outline="",
+                    width=0,
+                    tags=(f"blk{block.bid}", "block"),
+                )
+                block.image_id = self._cv.create_image(
+                    cx1,
+                    cy1,
+                    anchor="nw",
+                    image=photo,
+                    tags=(f"blk{block.bid}", "block"),
+                )
+                self._cv.tag_raise(block.rect_id)
+            elif block.df is not None:
+                # First render (or after undo cleared the base image)
                 self._render_block(block)
             else:
                 self._draw_empty_block(block)
 
-        # Redraw shapes
+        # Shapes and text objects
         for shape in self._shapes:
             self._draw_shape(shape)
+        for text_obj in self._texts:
+            self._draw_text(text_obj)
 
-        # Redraw texts
-        for text in self._texts:
-            self._draw_text(text)
+        # Restore selection highlights and resize handles
+        if self._selected:
+            self._highlight(self._selected)
+        if self._selected_shape:
+            self._highlight_shape(self._selected_shape)
+        if self._selected_text:
+            self._highlight_text(self._selected_text)
+        for obj in self._selected_objects:
+            if isinstance(obj, PlotBlock) and obj is not self._selected:
+                self._highlight(obj)
+            elif isinstance(obj, Shape) and obj is not self._selected_shape:
+                self._highlight_shape(obj)
+
+    def _on_zoom_scroll(self, event):
+        """Handle Ctrl+mousewheel zoom events."""
+        if event.num == 4:
+            # Linux scroll-up button
+            factor = ZOOM_STEP
+        elif event.num == 5:
+            # Linux scroll-down button
+            factor = 1.0 / ZOOM_STEP
+        elif event.delta != 0:
+            # Windows / macOS: delta is proportional to scroll distance.
+            # Use a continuous formula so smooth-scroll trackpads zoom smoothly.
+            factor = ZOOM_STEP ** (event.delta / 120)
+        else:
+            return "break"
+        self._apply_zoom(self._zoom * factor, event.x, event.y)
+        return "break"
+
+    def _on_pinch_zoom(self, event):
+        """Handle macOS trackpad pinch-to-zoom (<<Magnify>> event).
+
+        On macOS, Tk fires <<Magnify>> events during a pinch gesture.
+        event.delta is the fractional magnification change (e.g. 0.05 for 5 %
+        zoom-in, -0.05 for 5 % zoom-out).
+
+        The binding is on the root window so the event fires regardless of
+        which widget has focus.  Compute the zoom anchor from the pointer's
+        screen position relative to the canvas rather than relying on
+        event.x/y (which are root-window-relative when bound at root level).
+        """
+        factor = 1.0 + event.delta
+        if factor > 0.05:  # sanity-clamp: ignore absurd negative deltas
+            x = self._cv.winfo_pointerx() - self._cv.winfo_rootx()
+            y = self._cv.winfo_pointery() - self._cv.winfo_rooty()
+            self._apply_zoom(self._zoom * factor, x, y)
+        return "break"
+
+    def _setup_macos_pinch_ctypes(self) -> bool:
+        """Install pinch-to-zoom via NSEvent local monitor on macOS.
+
+        Some Tk builds (e.g. conda-forge) do not compile in Aqua gesture support,
+        so <<Magnify>> virtual events are never generated from a real pinch.
+        NSEvent.addLocalMonitorForEventsMatchingMask: with NSEventMaskMagnify fires
+        reliably regardless of Tk build.  The invoke callback must be module-level
+        (not a closure) so that ctypes exposes a real callable C thunk to the ObjC
+        block runtime on Python 3.13+/ARM64.
+
+        Returns True if the monitor was installed successfully, False otherwise.
+        All ctypes objects that must outlive this call are kept alive in
+        self._pinch_ctypes_refs.
+        """
+        import ctypes
+        import platform as _plat
+
+        try:
+            _objc = ctypes.cdll.LoadLibrary("/usr/lib/libobjc.A.dylib")
+            _libsys = ctypes.cdll.LoadLibrary("/usr/lib/libSystem.B.dylib")
+
+            _objc.objc_getClass.restype = ctypes.c_void_p
+            _objc.objc_getClass.argtypes = [ctypes.c_char_p]
+            _objc.sel_registerName.restype = ctypes.c_void_p
+            _objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+            _send_addr = ctypes.cast(_objc.objc_msgSend, ctypes.c_void_p).value
+            _msg_id = ctypes.CFUNCTYPE(
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+            )(_send_addr)
+
+            # [NSEvent magnification] returns CGFloat (double on 64-bit)
+            _sel_mag = _objc.sel_registerName(b"magnification")
+            if _plat.machine() == "x86_64":
+                try:
+                    _msg_dbl = ctypes.CFUNCTYPE(
+                        ctypes.c_double, ctypes.c_void_p, ctypes.c_void_p
+                    )(ctypes.cast(_objc.objc_msgSend_fpret, ctypes.c_void_p).value)
+                except AttributeError:
+                    return False
+            else:
+                _msg_dbl = ctypes.CFUNCTYPE(
+                    ctypes.c_double, ctypes.c_void_p, ctypes.c_void_p
+                )(_send_addr)
+
+            # ObjC Block ABI structs (_NSConcreteGlobalBlock)
+            _block_isa = ctypes.c_void_p.in_dll(_libsys, "_NSConcreteGlobalBlock").value
+
+            class _Desc(ctypes.Structure):
+                _fields_ = [("reserved", ctypes.c_ulong), ("size", ctypes.c_ulong)]
+
+            _InvFn = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+
+            class _Block(ctypes.Structure):
+                _fields_ = [
+                    ("isa", ctypes.c_void_p),
+                    ("flags", ctypes.c_int),
+                    ("reserved", ctypes.c_int),
+                    ("invoke", ctypes.c_void_p),
+                    ("descriptor", ctypes.POINTER(_Desc)),
+                ]
+
+            import queue as _qmod
+
+            _pinch_q = _qmod.SimpleQueue()
+
+            # Populate the module-level state consumed by _ktf_pinch_invoke
+            _ktf_pinch_state.update(
+                msg_dbl=_msg_dbl,
+                sel_mag=_sel_mag,
+                pinch_q=_pinch_q,
+            )
+
+            # Wrap the MODULE-LEVEL function — ctypes gives it a real callable thunk
+            inv_fn = _InvFn(_ktf_pinch_invoke)
+            _invoke_addr = ctypes.cast(inv_fn, ctypes.c_void_p).value
+            if not _invoke_addr:
+                # Fallback: read thunk ptr directly from CFUNCTYPE object buffer
+                _invoke_addr = ctypes.c_void_p.from_address(
+                    ctypes.addressof(inv_fn)
+                ).value
+            if not _invoke_addr:
+                return False
+
+            desc = _Desc(reserved=0, size=ctypes.sizeof(_Block))
+            block = _Block(
+                isa=_block_isa,
+                flags=0x10000000,  # BLOCK_IS_GLOBAL
+                reserved=0,
+                invoke=_invoke_addr,
+                descriptor=ctypes.pointer(desc),
+            )
+
+            # Register local event monitor for NSEventMaskMagnify (1 << 30)
+            _NSEvent = _objc.objc_getClass(b"NSEvent")
+            _sel_add_mon = _objc.sel_registerName(
+                b"addLocalMonitorForEventsMatchingMask:handler:"
+            )
+            _add_mon_fn = ctypes.CFUNCTYPE(
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_void_p,
+            )(_send_addr)
+
+            mon_tok = _add_mon_fn(
+                _NSEvent,
+                _sel_add_mon,
+                ctypes.c_ulong(1 << 30),  # NSEventMaskMagnify
+                ctypes.addressof(block),
+            )
+            if not mon_tok:
+                return False
+
+            _cv = self._cv
+            _root = self.root
+            _apply_zoom = self._apply_zoom
+            _get_zoom = lambda: self._zoom
+
+            def _poll_pinch():
+                """Drain pending magnification deltas on the main Tk thread."""
+                try:
+                    while True:
+                        mag = _pinch_q.get_nowait()
+                        factor = 1.0 + mag
+                        if factor > 0.05:
+                            x = _cv.winfo_pointerx() - _cv.winfo_rootx()
+                            y = _cv.winfo_pointery() - _cv.winfo_rooty()
+                            try:
+                                _apply_zoom(_get_zoom() * factor, x, y)
+                            except Exception:
+                                pass
+                except _qmod.Empty:
+                    pass
+                except Exception:
+                    pass
+                _root.after(8, _poll_pinch)  # always reschedule ~120 Hz
+
+            _root.after(8, _poll_pinch)
+
+            # Persist all ctypes objects so the GC never reclaims them
+            self._pinch_ctypes_refs = dict(
+                inv_fn=inv_fn,
+                block=block,
+                desc=desc,
+                msg_dbl=_msg_dbl,
+                msg_id=_msg_id,
+                sel_mag=_sel_mag,
+                NSEvent=_NSEvent,
+                mon_tok=mon_tok,
+                add_mon_fn=_add_mon_fn,
+                sel_add_mon=_sel_add_mon,
+                objc=_objc,
+                pinch_q=_pinch_q,
+                poll_fn=_poll_pinch,
+            )
+            return True
+
+        except (
+            Exception
+        ):  # noqa: BLE001 — non-critical, caller falls back to Tk binding
+            return False
 
     # -----------------------------------------------------------------------
     # Copy/Paste System
