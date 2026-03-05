@@ -56,6 +56,10 @@ DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
 HOVER_PAD = 5  # pixel buffer around objects for hover/cursor detection
 
+ZOOM_MIN = 0.25  # minimum canvas zoom (25 %)
+ZOOM_MAX = 4.0  # maximum canvas zoom (400 %)
+ZOOM_STEP = 1.25  # zoom factor applied per scroll tick or keyboard shortcut
+
 # Unit conversion: multiply px value by these to get the given unit
 # (or divide px by these to convert FROM the unit)
 _UNIT_TO_PX = {
@@ -170,7 +174,9 @@ FONT_FAMILIES = [
 # ---------------------------------------------------------------------------
 # Mouse wheel scrolling helper
 # ---------------------------------------------------------------------------
-def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical", stop_propagation=False):
+def bind_mousewheel(
+    widget, canvas_or_scrollable, orientation="vertical", stop_propagation=False
+):
     """Bind mouse wheel events to a widget for scrolling a canvas or scrollable widget.
 
     Args:
@@ -183,6 +189,9 @@ def bind_mousewheel(widget, canvas_or_scrollable, orientation="vertical", stop_p
     """
 
     def _on_mousewheel(event):
+        # Ctrl+scroll is reserved for zoom — do not scroll the canvas
+        if event.state & 0x4:
+            return
         # Determine scroll direction and amount
         if event.num == 4 or event.delta > 0:
             delta = -1
@@ -462,6 +471,9 @@ class PlotBlock:
         self.label_id = None
         self._photo = None  # keep reference so GC does not collect it
         self._pil_img = None  # PIL image for export
+        self._pil_img_base = (
+            None  # original matplotlib render; used for fast zoom rescale
+        )
 
     def __deepcopy__(self, memo):
         """Custom deep-copy that skips tkinter PhotoImage (_photo), which
@@ -470,8 +482,9 @@ class PlotBlock:
         result = cls.__new__(cls)
         memo[id(self)] = result
         for k, v in self.__dict__.items():
-            if k == "_photo":
-                # ImageTk.PhotoImage holds a tkinter reference — skip it
+            if k in ("_photo", "_pil_img_base"):
+                # ImageTk.PhotoImage holds a tkinter reference; _pil_img_base is a
+                # display cache that is regenerated on demand — skip both.
                 setattr(result, k, None)
             else:
                 setattr(result, k, copy.deepcopy(v, memo))
@@ -2202,6 +2215,42 @@ class PlotRenderer:
 
 
 # ---------------------------------------------------------------------------
+# macOS pinch-to-zoom: module-level ObjC block callback
+#
+# ctypes.CFUNCTYPE closures (functions defined inside methods) do not expose
+# a directly callable C thunk to AppKit's ObjC block runtime on Python 3.13+
+# ARM64.  Module-level functions do.  State is shared via a plain dict.
+# ---------------------------------------------------------------------------
+_ktf_pinch_state: dict = {}  # populated by KTFigure._setup_macos_pinch_ctypes
+
+
+def _ktf_pinch_invoke(block_ptr, event_ptr):
+    """ObjC block invoke for NSEventMaskMagnify.
+
+    Called from AppKit's event thread; acquires the GIL explicitly.
+    Must be module-level so that ctypes exposes a real callable C thunk to
+    the ObjC block runtime (closures defined inside methods do not work).
+    """
+    import ctypes as _ct
+    _papi  = _ct.pythonapi
+    gstate = _papi.PyGILState_Ensure()
+    try:
+        state   = _ktf_pinch_state
+        msg_dbl = state.get('msg_dbl')
+        sel_mag = state.get('sel_mag')
+        pinch_q = state.get('pinch_q')
+        if msg_dbl and sel_mag and pinch_q and event_ptr:
+            mag = msg_dbl(event_ptr, sel_mag)
+            if abs(mag) > 1e-9:
+                pinch_q.put_nowait(mag)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        _papi.PyGILState_Release(_ct.c_int(gstate))
+    return event_ptr
+
+
+# ---------------------------------------------------------------------------
 # Main Application
 # ---------------------------------------------------------------------------
 class KTFigure:
@@ -2275,6 +2324,9 @@ class KTFigure:
 
         # Clipboard
         self._clipboard = None
+
+        # Canvas zoom level (1.0 = 100 %)
+        self._zoom: float = 1.0
 
         # Theme
         self._is_dark = False
@@ -2490,8 +2542,27 @@ class KTFigure:
         vsb.pack(side="right", fill="y")
         self._cv.pack(side="left", fill="both", expand=True)
 
-        # Enable mouse wheel scrolling
+        # Enable mouse wheel scrolling (Ctrl+scroll reserved for zoom)
         bind_mousewheel(self._cv, self._cv, "both")
+
+        # Zoom: Ctrl+scroll (all platforms) and macOS pinch gesture
+        self._cv.bind("<Control-MouseWheel>", self._on_zoom_scroll)
+        self._cv.bind(
+            "<Control-Button-4>", self._on_zoom_scroll
+        )  # Linux Ctrl+scroll up
+        self._cv.bind(
+            "<Control-Button-5>", self._on_zoom_scroll
+        )  # Linux Ctrl+scroll down
+        # Pinch-to-zoom (macOS only).
+        # Primary:  ctypes NSEvent local monitor — works with all Tk builds.
+        # Fallback: Tk's <<Magnify>> virtual event — only on Aqua Tk builds that
+        #           compile in gesture support (e.g. python.org Tk, not conda-forge).
+        if sys.platform == "darwin":
+            if not self._setup_macos_pinch_ctypes():
+                try:
+                    self.root.bind("<<Magnify>>", self._on_pinch_zoom)
+                except tk.TclError:
+                    pass
 
         self._cv.configure(
             scrollregion=(0, 0, A4_W + 2 * BOARD_PAD, A4_H + 2 * BOARD_PAD)
@@ -2521,6 +2592,27 @@ class KTFigure:
         self.root.bind(f"<{cmd_key}-a>", lambda e: self._select_all())
         self.root.bind("<Delete>", lambda e: self._delete_key())
         self.root.bind("<BackSpace>", lambda e: self._delete_key())
+
+        # Zoom keyboard shortcuts — zoom anchored to the canvas centre
+        def _zoom_in(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(self._zoom * ZOOM_STEP, cx, cy)
+
+        def _zoom_out(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(self._zoom / ZOOM_STEP, cx, cy)
+
+        def _zoom_reset(e=None):
+            cx = self._cv.winfo_width() // 2
+            cy = self._cv.winfo_height() // 2
+            self._apply_zoom(1.0, cx, cy)
+
+        self.root.bind(f"<{cmd_key}-equal>", _zoom_in)  # Ctrl/Cmd + =
+        self.root.bind(f"<{cmd_key}-KP_Add>", _zoom_in)  # numpad +
+        self.root.bind(f"<{cmd_key}-minus>", _zoom_out)  # Ctrl/Cmd + -
+        self.root.bind(f"<{cmd_key}-0>", _zoom_reset)  # Ctrl/Cmd + 0
 
         # status bar
         self._status_sep = tk.Frame(self.root, bg=TC["sep"], height=1)
@@ -2552,12 +2644,14 @@ class KTFigure:
 
     def _draw_artboard(self):
         ox, oy = BOARD_PAD, BOARD_PAD
+        aw = A4_W * self._zoom  # artboard width in canvas pixels
+        ah = A4_H * self._zoom  # artboard height in canvas pixels
         # drop shadow
         self._cv.create_rectangle(
             ox + 5,
             oy + 5,
-            ox + A4_W + 5,
-            oy + A4_H + 5,
+            ox + aw + 5,
+            oy + ah + 5,
             fill="#222",
             outline="",
             tags="bg",
@@ -2566,29 +2660,31 @@ class KTFigure:
         self._cv.create_rectangle(
             ox,
             oy,
-            ox + A4_W,
-            oy + A4_H,
+            ox + aw,
+            oy + ah,
             fill="white",
             outline="#bbb",
             width=1,
             tags="artboard",
         )
-        # subtle rulers
-        for x in range(0, A4_W + 1, 100):
-            self._cv.create_line(ox + x, oy, ox + x, oy + 8, fill="#ccc", tags="ruler")
-        for y in range(0, A4_H + 1, 100):
-            self._cv.create_line(ox, oy + y, ox + 8, oy + y, fill="#ccc", tags="ruler")
+        # subtle rulers (spaced every 100 board units, scaled by zoom)
+        for bx in range(0, A4_W + 1, 100):
+            cx = ox + bx * self._zoom
+            self._cv.create_line(cx, oy, cx, oy + 8, fill="#ccc", tags="ruler")
+        for by in range(0, A4_H + 1, 100):
+            cy = oy + by * self._zoom
+            self._cv.create_line(ox, cy, ox + 8, cy, fill="#ccc", tags="ruler")
 
     # -----------------------------------------------------------------------
     # Coordinate helpers
     # -----------------------------------------------------------------------
     def _to_board(self, cx, cy):
-        bx = cx - BOARD_PAD
-        by = cy - BOARD_PAD
-        return max(0, min(bx, A4_W)), max(0, min(by, A4_H))
+        bx = (cx - BOARD_PAD) / self._zoom
+        by = (cy - BOARD_PAD) / self._zoom
+        return max(0.0, min(bx, A4_W)), max(0.0, min(by, A4_H))
 
     def _to_canvas(self, bx, by):
-        return bx + BOARD_PAD, by + BOARD_PAD
+        return bx * self._zoom + BOARD_PAD, by * self._zoom + BOARD_PAD
 
     def _ev_board(self, event):
         return self._to_board(self._cv.canvasx(event.x), self._cv.canvasy(event.y))
@@ -2607,32 +2703,43 @@ class KTFigure:
         return self._snap(bx), self._snap(by)
 
     def _draw_grid(self):
-        """Draw grid lines across the artboard.
+        """Draw grid lines across the artboard (zoom-aware).
 
         The artboard is always rendered on a white background regardless of
         the UI theme, so a fixed light-grey colour is appropriate here.
         """
         ox, oy = BOARD_PAD, BOARD_PAD
-        for x in range(0, A4_W + 1, GRID_SIZE):
+        aw = A4_W * self._zoom  # artboard canvas width
+        ah = A4_H * self._zoom  # artboard canvas height
+        grid_px = GRID_SIZE * self._zoom  # grid spacing in canvas pixels
+        dash_on = 1
+        dash_off = max(1, int(grid_px) - 1)
+        x = 0.0
+        while x <= aw + 0.5:
+            cx = ox + x
             self._cv.create_line(
-                ox + x,
+                cx,
                 oy,
-                ox + x,
-                oy + A4_H,
+                cx,
+                oy + ah,
                 fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
+                dash=(dash_on, dash_off),
                 tags="grid",
             )
-        for y in range(0, A4_H + 1, GRID_SIZE):
+            x += grid_px
+        y = 0.0
+        while y <= ah + 0.5:
+            cy = oy + y
             self._cv.create_line(
                 ox,
-                oy + y,
-                ox + A4_W,
-                oy + y,
+                cy,
+                ox + aw,
+                cy,
                 fill="#cccccc",
-                dash=(1, GRID_SIZE - 1),
+                dash=(dash_on, dash_off),
                 tags="grid",
             )
+            y += grid_px
         # Place grid above the artboard (white sheet) but below blocks/shapes
         self._cv.tag_raise("grid", "artboard")
 
@@ -4742,6 +4849,10 @@ class KTFigure:
         _, _, pil_img = fig_to_photoimage(fig)
         plt.close(fig)
 
+        # Store the untouched matplotlib render so _redraw_at_zoom can rescale
+        # it quickly without re-running the full matplotlib pipeline.
+        block._pil_img_base = pil_img
+
         cx1, cy1 = self._to_canvas(block.x1, block.y1)
         cx2, cy2 = self._to_canvas(block.x2, block.y2)
 
@@ -5008,7 +5119,12 @@ class KTFigure:
         # the widget handle the keystroke normally instead of deleting an object.
         focused = self.root.focus_get()
         if focused is not None and focused.winfo_class() in (
-            "Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox"
+            "Entry",
+            "Text",
+            "Spinbox",
+            "TEntry",
+            "TSpinbox",
+            "TCombobox",
         ):
             return
 
@@ -5165,39 +5281,332 @@ class KTFigure:
 
     def _redraw_all(self):
         """Redraw all blocks and shapes after undo/redo."""
-        # Clear canvas except background
-        for item in self._cv.find_all():
-            tags = self._cv.gettags(item)
-            if "bg" not in tags and "artboard" not in tags and "ruler" not in tags:
-                self._cv.delete(item)
+        self._redraw_at_zoom()
 
-        # Reset IDs
+    # -----------------------------------------------------------------------
+    # Zoom
+    # -----------------------------------------------------------------------
+
+    def _apply_zoom(self, new_zoom: float, event_x: int, event_y: int):
+        """Change the canvas zoom level, keeping the canvas point under
+        (event_x, event_y) fixed under the cursor.
+
+        Args:
+            new_zoom:  Desired zoom level (will be clamped to [ZOOM_MIN, ZOOM_MAX]).
+            event_x:   Widget-relative X of the anchor point (e.g. event.x).
+            event_y:   Widget-relative Y of the anchor point (e.g. event.y).
+        """
+        new_zoom = max(ZOOM_MIN, min(ZOOM_MAX, new_zoom))
+        if abs(new_zoom - self._zoom) < 1e-9:
+            return
+
+        ratio = new_zoom / self._zoom
+
+        # Canvas coordinates of the anchor point before the zoom change.
+        # canvasx/canvasy convert widget coords → canvas coords (accounting for scroll).
+        mc_x = self._cv.canvasx(event_x)
+        mc_y = self._cv.canvasy(event_y)
+
+        # Current scroll offset: the canvas coord visible at the widget's top-left.
+        sx = self._cv.canvasx(0)
+        sy = self._cv.canvasy(0)
+
+        # Apply new zoom
+        self._zoom = new_zoom
+        total_w = A4_W * new_zoom + 2 * BOARD_PAD
+        total_h = A4_H * new_zoom + 2 * BOARD_PAD
+        self._cv.configure(scrollregion=(0, 0, total_w, total_h))
+
+        # Redraw everything at the new zoom level
+        self._redraw_at_zoom()
+
+        # Scroll so that the board point that was under the cursor stays there.
+        # Derivation:
+        #   new canvas coord of anchor board point = (mc_x - BOARD_PAD) * ratio + BOARD_PAD
+        #   new scroll offset = new_canvas_anchor - widget_anchor_x
+        #                     = (mc_x - BOARD_PAD)*(ratio-1) + sx
+        new_sx = (mc_x - BOARD_PAD) * (ratio - 1) + sx
+        new_sy = (mc_y - BOARD_PAD) * (ratio - 1) + sy
+        self._cv.xview_moveto(max(0.0, new_sx) / total_w)
+        self._cv.yview_moveto(max(0.0, new_sy) / total_h)
+
+        self._set_status(f"Zoom: {int(new_zoom * 100)}%  —  Ctrl+0 to reset")
+
+    def _redraw_at_zoom(self):
+        """Fully redraw all canvas content at the current zoom level.
+
+        Used both by _apply_zoom (zoom change) and _redraw_all (undo/redo).
+        Blocks that have a cached base PIL image are rescaled without re-running
+        matplotlib; only uncached blocks trigger a full re-render.
+        """
+        # Clear the entire canvas
+        self._cv.delete("all")
+
+        # Reset canvas item IDs so they are re-created below
         for block in self._blocks:
             block.rect_id = None
             block.image_id = None
             block.label_id = None
-            block._pil_img = None
-
         for shape in self._shapes:
             shape.item_id = None
+        for text_obj in self._texts:
+            text_obj.item_id = None
+        self._resize_handles = []
 
-        for text in self._texts:
-            text.item_id = None
+        # Background and artboard
+        self._draw_artboard()
 
-        # Redraw blocks
+        # Grid overlay (if enabled)
+        if self._show_grid:
+            self._draw_grid()
+
+        # Blocks
         for block in self._blocks:
-            if block.df is not None:
+            if block._pil_img_base is not None:
+                # Fast path: rescale the stored matplotlib render to the new size
+                cx1, cy1 = self._to_canvas(block.x1, block.y1)
+                cx2, cy2 = self._to_canvas(block.x2, block.y2)
+                target_w = max(1, int(cx2 - cx1))
+                target_h = max(1, int(cy2 - cy1))
+                from PIL import Image as _PILImage, ImageTk as _ImageTk
+
+                pil_img = block._pil_img_base.resize(
+                    (target_w, target_h), _PILImage.LANCZOS
+                )
+                photo = _ImageTk.PhotoImage(pil_img)
+                block._photo = photo
+
+                # Create the placeholder rect (hidden outline; shown when selected)
+                block.rect_id = self._cv.create_rectangle(
+                    cx1,
+                    cy1,
+                    cx2,
+                    cy2,
+                    outline="",
+                    width=0,
+                    tags=(f"blk{block.bid}", "block"),
+                )
+                block.image_id = self._cv.create_image(
+                    cx1,
+                    cy1,
+                    anchor="nw",
+                    image=photo,
+                    tags=(f"blk{block.bid}", "block"),
+                )
+                self._cv.tag_raise(block.rect_id)
+            elif block.df is not None:
+                # First render (or after undo cleared the base image)
                 self._render_block(block)
             else:
                 self._draw_empty_block(block)
 
-        # Redraw shapes
+        # Shapes and text objects
         for shape in self._shapes:
             self._draw_shape(shape)
+        for text_obj in self._texts:
+            self._draw_text(text_obj)
 
-        # Redraw texts
-        for text in self._texts:
-            self._draw_text(text)
+        # Restore selection highlights and resize handles
+        if self._selected:
+            self._highlight(self._selected)
+        if self._selected_shape:
+            self._highlight_shape(self._selected_shape)
+        if self._selected_text:
+            self._highlight_text(self._selected_text)
+        for obj in self._selected_objects:
+            if isinstance(obj, PlotBlock) and obj is not self._selected:
+                self._highlight(obj)
+            elif isinstance(obj, Shape) and obj is not self._selected_shape:
+                self._highlight_shape(obj)
+
+    def _on_zoom_scroll(self, event):
+        """Handle Ctrl+mousewheel zoom events."""
+        if event.num == 4:
+            # Linux scroll-up button
+            factor = ZOOM_STEP
+        elif event.num == 5:
+            # Linux scroll-down button
+            factor = 1.0 / ZOOM_STEP
+        elif event.delta != 0:
+            # Windows / macOS: delta is proportional to scroll distance.
+            # Use a continuous formula so smooth-scroll trackpads zoom smoothly.
+            factor = ZOOM_STEP ** (event.delta / 120)
+        else:
+            return "break"
+        self._apply_zoom(self._zoom * factor, event.x, event.y)
+        return "break"
+
+    def _on_pinch_zoom(self, event):
+        """Handle macOS trackpad pinch-to-zoom (<<Magnify>> event).
+
+        On macOS, Tk fires <<Magnify>> events during a pinch gesture.
+        event.delta is the fractional magnification change (e.g. 0.05 for 5 %
+        zoom-in, -0.05 for 5 % zoom-out).
+
+        The binding is on the root window so the event fires regardless of
+        which widget has focus.  Compute the zoom anchor from the pointer's
+        screen position relative to the canvas rather than relying on
+        event.x/y (which are root-window-relative when bound at root level).
+        """
+        factor = 1.0 + event.delta
+        if factor > 0.05:  # sanity-clamp: ignore absurd negative deltas
+            x = self._cv.winfo_pointerx() - self._cv.winfo_rootx()
+            y = self._cv.winfo_pointery() - self._cv.winfo_rooty()
+            self._apply_zoom(self._zoom * factor, x, y)
+        return "break"
+
+    def _setup_macos_pinch_ctypes(self) -> bool:
+        """Install pinch-to-zoom via NSEvent local monitor on macOS.
+
+        Some Tk builds (e.g. conda-forge) do not compile in Aqua gesture support,
+        so <<Magnify>> virtual events are never generated from a real pinch.
+        NSEvent.addLocalMonitorForEventsMatchingMask: with NSEventMaskMagnify fires
+        reliably regardless of Tk build.  The invoke callback must be module-level
+        (not a closure) so that ctypes exposes a real callable C thunk to the ObjC
+        block runtime on Python 3.13+/ARM64.
+
+        Returns True if the monitor was installed successfully, False otherwise.
+        All ctypes objects that must outlive this call are kept alive in
+        self._pinch_ctypes_refs.
+        """
+        import ctypes
+        import platform as _plat
+
+        try:
+            _objc   = ctypes.cdll.LoadLibrary('/usr/lib/libobjc.A.dylib')
+            _libsys = ctypes.cdll.LoadLibrary('/usr/lib/libSystem.B.dylib')
+
+            _objc.objc_getClass.restype     = ctypes.c_void_p
+            _objc.objc_getClass.argtypes    = [ctypes.c_char_p]
+            _objc.sel_registerName.restype  = ctypes.c_void_p
+            _objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+            _send_addr = ctypes.cast(_objc.objc_msgSend, ctypes.c_void_p).value
+            _msg_id    = ctypes.CFUNCTYPE(
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+            )(_send_addr)
+
+            # [NSEvent magnification] returns CGFloat (double on 64-bit)
+            _sel_mag = _objc.sel_registerName(b'magnification')
+            if _plat.machine() == 'x86_64':
+                try:
+                    _msg_dbl = ctypes.CFUNCTYPE(
+                        ctypes.c_double, ctypes.c_void_p, ctypes.c_void_p
+                    )(ctypes.cast(_objc.objc_msgSend_fpret, ctypes.c_void_p).value)
+                except AttributeError:
+                    return False
+            else:
+                _msg_dbl = ctypes.CFUNCTYPE(
+                    ctypes.c_double, ctypes.c_void_p, ctypes.c_void_p
+                )(_send_addr)
+
+            # ObjC Block ABI structs (_NSConcreteGlobalBlock)
+            _block_isa = ctypes.c_void_p.in_dll(_libsys, '_NSConcreteGlobalBlock').value
+
+            class _Desc(ctypes.Structure):
+                _fields_ = [('reserved', ctypes.c_ulong), ('size', ctypes.c_ulong)]
+
+            _InvFn = ctypes.CFUNCTYPE(
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+            )
+
+            class _Block(ctypes.Structure):
+                _fields_ = [
+                    ('isa',        ctypes.c_void_p),
+                    ('flags',      ctypes.c_int),
+                    ('reserved',   ctypes.c_int),
+                    ('invoke',     ctypes.c_void_p),
+                    ('descriptor', ctypes.POINTER(_Desc)),
+                ]
+
+            import queue as _qmod
+            _pinch_q = _qmod.SimpleQueue()
+
+            # Populate the module-level state consumed by _ktf_pinch_invoke
+            _ktf_pinch_state.update(
+                msg_dbl=_msg_dbl,
+                sel_mag=_sel_mag,
+                pinch_q=_pinch_q,
+            )
+
+            # Wrap the MODULE-LEVEL function — ctypes gives it a real callable thunk
+            inv_fn       = _InvFn(_ktf_pinch_invoke)
+            _invoke_addr = ctypes.cast(inv_fn, ctypes.c_void_p).value
+            if not _invoke_addr:
+                # Fallback: read thunk ptr directly from CFUNCTYPE object buffer
+                _invoke_addr = ctypes.c_void_p.from_address(
+                    ctypes.addressof(inv_fn)
+                ).value
+            if not _invoke_addr:
+                return False
+
+            desc  = _Desc(reserved=0, size=ctypes.sizeof(_Block))
+            block = _Block(
+                isa        = _block_isa,
+                flags      = 0x10000000,  # BLOCK_IS_GLOBAL
+                reserved   = 0,
+                invoke     = _invoke_addr,
+                descriptor = ctypes.pointer(desc),
+            )
+
+            # Register local event monitor for NSEventMaskMagnify (1 << 30)
+            _NSEvent     = _objc.objc_getClass(b'NSEvent')
+            _sel_add_mon = _objc.sel_registerName(
+                b'addLocalMonitorForEventsMatchingMask:handler:'
+            )
+            _add_mon_fn  = ctypes.CFUNCTYPE(
+                ctypes.c_void_p,
+                ctypes.c_void_p, ctypes.c_void_p,
+                ctypes.c_ulong,  ctypes.c_void_p,
+            )(_send_addr)
+
+            mon_tok = _add_mon_fn(
+                _NSEvent, _sel_add_mon,
+                ctypes.c_ulong(1 << 30),    # NSEventMaskMagnify
+                ctypes.addressof(block),
+            )
+            if not mon_tok:
+                return False
+
+            _cv         = self._cv
+            _root       = self.root
+            _apply_zoom = self._apply_zoom
+            _get_zoom   = lambda: self._zoom
+
+            def _poll_pinch():
+                """Drain pending magnification deltas on the main Tk thread."""
+                try:
+                    while True:
+                        mag    = _pinch_q.get_nowait()
+                        factor = 1.0 + mag
+                        if factor > 0.05:
+                            x = _cv.winfo_pointerx() - _cv.winfo_rootx()
+                            y = _cv.winfo_pointery() - _cv.winfo_rooty()
+                            try:
+                                _apply_zoom(_get_zoom() * factor, x, y)
+                            except Exception:
+                                pass
+                except _qmod.Empty:
+                    pass
+                except Exception:
+                    pass
+                _root.after(8, _poll_pinch)  # always reschedule ~120 Hz
+
+            _root.after(8, _poll_pinch)
+
+            # Persist all ctypes objects so the GC never reclaims them
+            self._pinch_ctypes_refs = dict(
+                inv_fn=inv_fn, block=block, desc=desc,
+                msg_dbl=_msg_dbl, msg_id=_msg_id,
+                sel_mag=_sel_mag,
+                NSEvent=_NSEvent, mon_tok=mon_tok,
+                add_mon_fn=_add_mon_fn, sel_add_mon=_sel_add_mon,
+                objc=_objc, pinch_q=_pinch_q, poll_fn=_poll_pinch,
+            )
+            return True
+
+        except Exception:  # noqa: BLE001 — non-critical, caller falls back to Tk binding
+            return False
 
     # -----------------------------------------------------------------------
     # Copy/Paste System
