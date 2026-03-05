@@ -398,7 +398,7 @@ class TestCtrlScroll:
 
 
 # ---------------------------------------------------------------------------
-# _on_magnify (macOS pinch-to-zoom accumulation)
+# _on_magnify (macOS pinch-to-zoom accumulation) — event-object shim path
 # ---------------------------------------------------------------------------
 
 class TestOnMagnify:
@@ -447,6 +447,98 @@ class TestOnMagnify:
         idx = _ZOOM_STEPS.index(1.0)
         assert self.app._zoom == _ZOOM_STEPS[idx + 1]
 
+
+# ---------------------------------------------------------------------------
+# _on_magnify_raw — the REAL macOS runtime path via registered Tcl command.
+# This is what fires at runtime on macOS (receives proper float %D value).
+# ---------------------------------------------------------------------------
+
+class TestOnMagnifyRaw:
+    """Tests for the Tcl-registered callback that receives %D %x %y strings.
+
+    This is the path that actually executes at runtime on macOS.  Standard
+    bind() maps %d (int) → event.delta, which is always 0 for Magnify.
+    The raw path receives the float %D string and converts it correctly.
+    """
+
+    def setup_method(self):
+        self.root, self.app = make_app()
+        self.app._magnify_accum = 0.0
+        self.app._set_zoom(1.0)
+        pump(self.root)
+
+    def teardown_method(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_parses_positive_float_string(self):
+        """A float string ≥ 0.1 causes zoom-in."""
+        idx = _ZOOM_STEPS.index(1.0)
+        self.app._on_magnify_raw("0.15", "400", "300")
+        pump(self.root)
+        assert self.app._zoom == _ZOOM_STEPS[idx + 1]
+
+    def test_parses_negative_float_string(self):
+        """A float string ≤ −0.1 causes zoom-out."""
+        idx = _ZOOM_STEPS.index(1.0)
+        self.app._on_magnify_raw("-0.15", "400", "300")
+        pump(self.root)
+        assert self.app._zoom == _ZOOM_STEPS[idx - 1]
+
+    def test_small_positive_accumulates_without_zoom(self):
+        self.app._on_magnify_raw("0.05", "400", "300")
+        assert self.app._zoom == 1.0
+        assert abs(self.app._magnify_accum - 0.05) < 1e-6
+
+    def test_accumulation_resets_after_threshold(self):
+        self.app._on_magnify_raw("0.12", "400", "300")
+        pump(self.root)
+        assert self.app._magnify_accum == 0.0
+
+    def test_accumulates_across_multiple_raw_calls(self):
+        """Several small string deltas must add up to trigger zoom."""
+        for _ in range(3):
+            self.app._on_magnify_raw("0.04", "400", "300")
+        pump(self.root)
+        idx = _ZOOM_STEPS.index(1.0)
+        assert self.app._zoom == _ZOOM_STEPS[idx + 1]
+
+    def test_invalid_string_is_silently_ignored(self):
+        """Malformed Tcl substitution must not raise."""
+        self.app._on_magnify_raw("bad", "400", "300")
+        assert self.app._zoom == 1.0
+        assert self.app._magnify_accum == 0.0
+
+    def test_cursor_coords_forwarded_to_zoom(self):
+        """x/y strings are forwarded so the pivot is cursor-centred."""
+        # Just check that non-default coords don't cause a crash.
+        self.app._on_magnify_raw("0.15", "200", "150")
+        pump(self.root)
+        idx = _ZOOM_STEPS.index(1.0)
+        assert self.app._zoom == _ZOOM_STEPS[idx + 1]
+
+    def test_raw_and_event_paths_produce_same_outcome(self):
+        """_on_magnify(event) and _on_magnify_raw(str, str, str) must behave identically."""
+        # Reset to 1.0, drive via raw path
+        self.app._set_zoom(1.0)
+        self.app._magnify_accum = 0.0
+        pump(self.root)
+        self.app._on_magnify_raw("0.15", "400", "300")
+        pump(self.root)
+        zoom_raw = self.app._zoom
+
+        # Reset to 1.0, drive via event-object shim
+        self.app._set_zoom(1.0)
+        self.app._magnify_accum = 0.0
+        pump(self.root)
+        evt = MockEvent(delta=0.15, x=400, y=300)
+        self.app._on_magnify(evt)
+        pump(self.root)
+        zoom_shim = self.app._zoom
+
+        assert zoom_raw == zoom_shim
 
 # ---------------------------------------------------------------------------
 # Cursor-centred zoom: scroll offset adjustment

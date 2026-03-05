@@ -2506,7 +2506,14 @@ class KTFigure:
         # macOS pinch-to-zoom (<Magnify> event, delta in %D float field)
         if sys.platform == "darwin":
             self._magnify_accum = 0.0
-            self._cv.bind("<Magnify>", self._on_magnify)
+            # Standard bind() delivers %d (integer) to event.delta, NOT %D
+            # (the float magnification amount).  Register a raw Tcl command
+            # that explicitly requests %D (float delta), %x and %y so the
+            # pinch magnitude is received correctly.
+            _magnify_cmd = self.root.register(self._on_magnify_raw)
+            self._cv.tk.call(
+                "bind", self._cv._w, "<Magnify>", _magnify_cmd + " %D %x %y"
+            )
 
         self._cv.configure(
             scrollregion=(0, 0, A4_W + 2 * BOARD_PAD, A4_H + 2 * BOARD_PAD)
@@ -2823,17 +2830,41 @@ class KTFigure:
             self._zoom_out(event.x, event.y)
         return "break"  # prevent normal scroll from also running
 
-    def _on_magnify(self, event):
-        """Handle macOS trackpad pinch-to-zoom (<Magnify> event).
+    def _on_magnify_raw(self, delta_str, x_str, y_str):
+        """Raw Tcl callback for macOS <Magnify>; receives ``%D %x %y`` as strings.
 
-        Tk reports the magnification delta as a float in ``event.delta`` (the
-        ``%D`` substitution).  Positive = pinch-open (zoom in), negative =
-        pinch-close (zoom out).  We accumulate small deltas and fire a zoom
-        step once the threshold is crossed to avoid jumpy behaviour.
+        Standard ``bind()`` maps the ``%d`` (integer) field to ``event.delta``,
+        which is always 0 for Magnify events.  This callback is registered via
+        ``root.register()`` + ``tk.call('bind', ..., cmd + ' %D %x %y')`` so
+        that the float ``%D`` field — the actual magnification amount — is
+        correctly received.
         """
-        self._magnify_accum += event.delta
-        cx = event.x
-        cy = event.y
+        try:
+            delta = float(delta_str)
+            cx = int(float(x_str))
+            cy = int(float(y_str))
+        except (ValueError, TypeError):
+            return
+        self._handle_magnify(delta, cx, cy)
+
+    def _on_magnify(self, event):
+        """Event-object shim for <Magnify>; used directly in tests.
+
+        At runtime on macOS the binding goes through ``_on_magnify_raw``
+        (which receives the correct float ``%D`` delta).  This shim allows
+        tests to drive the same ``_handle_magnify`` logic via a MockEvent.
+        """
+        delta = float(event.delta) if hasattr(event, "delta") else 0.0
+        self._handle_magnify(delta, event.x, event.y)
+
+    def _handle_magnify(self, delta: float, cx: int, cy: int):
+        """Accumulate pinch delta and fire a discrete zoom step at ±0.1 threshold.
+
+        Small per-event deltas are accumulated so that a slow, careful pinch
+        still triggers a step rather than requiring a sudden large gesture.
+        The accumulator resets to zero after each triggered step.
+        """
+        self._magnify_accum += delta
         if self._magnify_accum >= 0.1:
             self._magnify_accum = 0.0
             self._zoom_in(cx, cy)
