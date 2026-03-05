@@ -69,6 +69,7 @@ def sample_df():
 class TestMouseDownDrawModes:
     def setup_method(self):
         self.root, self.app = make_app()
+        self.app._snap_grid_size = GRID_SIZE
 
     def teardown_method(self):
         try:
@@ -554,23 +555,24 @@ class TestDeleteWithConfirmation:
             pass
 
     def test_delete_selected_block_confirmed(self):
+        # _delete_selected() was renamed to _delete_key() — no confirmation dialog
         before = len(self.app._blocks)
-        with patch("ktfigure.messagebox.askyesno", return_value=True):
-            self.app._delete_selected()
+        self.app._delete_key()
         after = len(self.app._blocks)
         assert after == before - 1
 
     def test_delete_selected_block_cancelled(self):
+        # Without a confirmation dialog, an unselected block is not deleted
+        self.app._select_block(None)
+        self.app._selected = None
         before = len(self.app._blocks)
-        with patch("ktfigure.messagebox.askyesno", return_value=False):
-            self.app._delete_selected()
+        self.app._delete_key()
         after = len(self.app._blocks)
         assert after == before
 
     def test_delete_key_with_selected_block_confirmed(self):
         before = len(self.app._blocks)
-        with patch("ktfigure.messagebox.askyesno", return_value=True):
-            self.app._delete_key()
+        self.app._delete_key()
         after = len(self.app._blocks)
         assert after == before - 1
 

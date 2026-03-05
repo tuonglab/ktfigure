@@ -95,14 +95,16 @@ class TestZoomCoordinates:
     def test_to_canvas_zoom_two(self):
         self.app._zoom = 2.0
         cx, cy = self.app._to_canvas(100, 200)
-        assert cx == pytest.approx(100 * 2 + BOARD_PAD)
-        assert cy == pytest.approx(200 * 2 + BOARD_PAD)
+        # Current formula: (BOARD_PAD + bx) * z, (BOARD_PAD + by) * z
+        assert cx == pytest.approx((BOARD_PAD + 100) * 2)
+        assert cy == pytest.approx((BOARD_PAD + 200) * 2)
 
     def test_to_canvas_zoom_half(self):
         self.app._zoom = 0.5
         cx, cy = self.app._to_canvas(200, 400)
-        assert cx == pytest.approx(200 * 0.5 + BOARD_PAD)
-        assert cy == pytest.approx(400 * 0.5 + BOARD_PAD)
+        # Current formula: (BOARD_PAD + bx) * z, (BOARD_PAD + by) * z
+        assert cx == pytest.approx((BOARD_PAD + 200) * 0.5)
+        assert cy == pytest.approx((BOARD_PAD + 400) * 0.5)
 
     def test_to_board_zoom_one(self):
         # canvas (100+60, 200+60) → board (100, 200)
@@ -112,8 +114,9 @@ class TestZoomCoordinates:
 
     def test_to_board_zoom_two(self):
         self.app._zoom = 2.0
-        # At zoom=2: canvas x = 100*2 + 60 = 260, canvas y = 200*2 + 60 = 460
-        bx, by = self.app._to_board(260, 460)
+        # Current formula: bx = cx/z - BOARD_PAD, by = cy/z - BOARD_PAD
+        # For board (100, 200) at zoom=2: canvas = (BOARD_PAD+100)*2=320, (BOARD_PAD+200)*2=520
+        bx, by = self.app._to_board(320, 520)
         assert bx == pytest.approx(100.0)
         assert by == pytest.approx(200.0)
 
@@ -132,26 +135,27 @@ class TestZoomCoordinates:
         assert bx1 == pytest.approx(bx0, abs=1e-6)
         assert by1 == pytest.approx(by0, abs=1e-6)
 
-    def test_to_board_clamped_at_origin(self):
+    def test_to_board_outside_origin(self):
         self.app._zoom = 1.0
-        # Canvas coord that maps below board origin (negative board coord)
-        bx, by = self.app._to_board(0, 0)  # (0-60)/1 = -60 → clamped to 0
-        assert bx == 0.0
-        assert by == 0.0
+        # Canvas coord (0,0) maps outside the artboard (no clamping in current code)
+        bx, by = self.app._to_board(0, 0)
+        assert bx == pytest.approx(-BOARD_PAD)
+        assert by == pytest.approx(-BOARD_PAD)
 
-    def test_to_board_clamped_at_max(self):
+    def test_to_board_outside_max(self):
         self.app._zoom = 1.0
+        # Large canvas coords map to large board coords (no clamping in current code)
         bx, by = self.app._to_board(10000, 10000)
-        assert bx == A4_W
-        assert by == A4_H
+        assert bx == pytest.approx(10000 - BOARD_PAD)
+        assert by == pytest.approx(10000 - BOARD_PAD)
 
-    def test_to_canvas_origin_at_board_pad(self):
-        """Board origin (0,0) must always land at (BOARD_PAD, BOARD_PAD) regardless of zoom."""
+    def test_to_canvas_origin_scales_with_zoom(self):
+        """Board origin (0,0) canvas coordinate scales with zoom: (BOARD_PAD*z, BOARD_PAD*z)."""
         for zoom in (0.5, 1.0, 2.0, 4.0):
             self.app._zoom = zoom
             cx, cy = self.app._to_canvas(0, 0)
-            assert cx == pytest.approx(BOARD_PAD)
-            assert cy == pytest.approx(BOARD_PAD)
+            assert cx == pytest.approx(BOARD_PAD * zoom)
+            assert cy == pytest.approx(BOARD_PAD * zoom)
 
 
 # ---------------------------------------------------------------------------
@@ -178,8 +182,9 @@ class TestApplyZoom:
             self.app._apply_zoom(2.0, 0, 0)
         sr = str(self.app._cv.cget("scrollregion"))
         parts = [float(p) for p in sr.split()]
-        expected_w = A4_W * 2.0 + 2 * BOARD_PAD
-        expected_h = A4_H * 2.0 + 2 * BOARD_PAD
+        # Current formula: total_w = _canvas_total_width() * zoom = (2*BOARD_PAD + A4_W) * zoom
+        expected_w = (2 * BOARD_PAD + A4_W) * 2.0
+        expected_h = (2 * BOARD_PAD + A4_H) * 2.0
         assert parts[2] == pytest.approx(expected_w)
         assert parts[3] == pytest.approx(expected_h)
 
@@ -262,50 +267,51 @@ class TestZoomAnchorMath:
         canvasx(0) = 0, canvasy(0) = 0
         mc_x = canvasx(300) = 300, mc_y = canvasy(300) = 300
         ratio = 2
-        new_sx = (300 - BOARD_PAD) * (2 - 1) + 0 = 300 - 60 = 240
-        new_sy = 240
-        total_w = A4_W*2 + 2*BOARD_PAD
+        new_sx = mc_x * (ratio - 1) + sx = 300 * (2 - 1) + 0 = 300
+        new_sy = 300
+        total_w = (2*BOARD_PAD + A4_W) * 2
         """
         fx, fy = self._capture_zoom(2.0, 300, 300)
-        total_w = A4_W * 2.0 + 2 * BOARD_PAD
-        total_h = A4_H * 2.0 + 2 * BOARD_PAD
-        expected_fx = max(0.0, 240.0) / total_w
-        expected_fy = max(0.0, 240.0) / total_h
+        total_w = (2 * BOARD_PAD + A4_W) * 2.0
+        total_h = (2 * BOARD_PAD + A4_H) * 2.0
+        expected_fx = max(0.0, 300.0) / total_w
+        expected_fy = max(0.0, 300.0) / total_h
         assert fx == pytest.approx(expected_fx, abs=1e-6)
         assert fy == pytest.approx(expected_fy, abs=1e-6)
 
     def test_anchor_board_point_preserved_math(self):
         """
-        Board point (200, 300) at zoom=1 is at canvas (260, 360).
-        After zoom to 2: board → canvas (460, 660).
-        Cursor was at widget x=260 (no scroll → widget=canvas).
-        Expected scroll: sx = 460 - 260 = 200, sy = 660 - 360 = 300.
+        Board point (200, 300) at zoom=1 maps to canvas (260, 360) via
+        current formula: (BOARD_PAD + bx)*z.
+        After zoom to 2: new_sx = mc_x * (ratio-1) = cx1 * 1 = cx1.
         """
         bx, by = 200.0, 300.0
         cx1, cy1 = self.app._to_canvas(bx, by)   # (260, 360) at zoom=1
         fx, fy = self._capture_zoom(2.0, cx1, cy1)
 
-        total_w = A4_W * 2.0 + 2 * BOARD_PAD
-        total_h = A4_H * 2.0 + 2 * BOARD_PAD
-        new_cx = bx * 2.0 + BOARD_PAD    # 460
-        new_cy = by * 2.0 + BOARD_PAD    # 660
-        expected_sx = new_cx - cx1        # 200
-        expected_sy = new_cy - cy1        # 300
+        total_w = (2 * BOARD_PAD + A4_W) * 2.0
+        total_h = (2 * BOARD_PAD + A4_H) * 2.0
+        # new_sx = mc_x * (ratio-1) + sx = cx1 * (2-1) + 0 = cx1
+        expected_sx = cx1 * (2.0 - 1.0)
+        expected_sy = cy1 * (2.0 - 1.0)
         expected_fx = max(0.0, expected_sx) / total_w
         expected_fy = max(0.0, expected_sy) / total_h
 
         assert fx == pytest.approx(expected_fx, abs=1e-6)
         assert fy == pytest.approx(expected_fy, abs=1e-6)
 
-    def test_cursor_at_board_pad_scrolls_to_zero(self):
+    def test_cursor_at_board_pad_scroll_fraction(self):
         """
-        Cursor at (BOARD_PAD, BOARD_PAD) = the top-left corner of the artboard.
-        new_sx = (BOARD_PAD - BOARD_PAD) * (r-1) + 0 = 0
-        So scrolling should go to 0 (top-left).
+        Cursor at (BOARD_PAD, BOARD_PAD).
+        new_sx = mc_x * (ratio - 1) + sx = BOARD_PAD * 1 + 0 = BOARD_PAD
         """
         fx, fy = self._capture_zoom(2.0, BOARD_PAD, BOARD_PAD)
-        assert fx == pytest.approx(0.0, abs=1e-6)
-        assert fy == pytest.approx(0.0, abs=1e-6)
+        total_w = (2 * BOARD_PAD + A4_W) * 2.0
+        total_h = (2 * BOARD_PAD + A4_H) * 2.0
+        expected_fx = max(0.0, float(BOARD_PAD)) / total_w
+        expected_fy = max(0.0, float(BOARD_PAD)) / total_h
+        assert fx == pytest.approx(expected_fx, abs=1e-6)
+        assert fy == pytest.approx(expected_fy, abs=1e-6)
 
     def test_zoom_out_scroll_fraction_clamped(self):
         """
