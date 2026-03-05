@@ -389,6 +389,23 @@ class TestMagnifyZoom:
         bindings = self.app._cv.bind()
         assert "<Magnify>" in bindings
 
+    @pytest.mark.skipif(
+        sys.platform != "darwin",
+        reason="<Magnify> event is macOS-only",
+    )
+    def test_magnify_binding_uses_uppercase_D_substitution(self):
+        """The <Magnify> Tcl bind script must pass %D (float data field), not
+        %d (integer detail field).  Using %d was the bug that caused the handler
+        to always receive '0' instead of the actual magnification float."""
+        bind_script = self.app._cv.tk.call(
+            "bind", self.app._cv._w, "<Magnify>"
+        )
+        assert "%D" in bind_script, (
+            "<Magnify> bind script does not contain '%D'; "
+            "pinch-to-zoom will silently receive 0 instead of the "
+            "actual magnification delta"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Windows precision-touchpad pinch-to-zoom via <MouseWheel> + Ctrl state bit

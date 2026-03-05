@@ -2581,8 +2581,13 @@ class KTFigure:
 
             try:
                 _magnify_cb = self._cv.register(_on_magnify)
+                # %D (uppercase) is the Tk substitution for the float data/delta
+                # field of the <Magnify> event (the actual magnification amount,
+                # e.g. "0.032").  %d (lowercase) is the integer detail field
+                # (typically 0), which was the typo that kept the handler from
+                # ever receiving a non-zero value.
                 self._cv.tk.call(
-                    "bind", self._cv._w, "<Magnify>", _magnify_cb + " %d"
+                    "bind", self._cv._w, "<Magnify>", _magnify_cb + " %D"
                 )
             except tk.TclError:
                 pass  # Tk build on this macOS installation doesn't support <Magnify>
