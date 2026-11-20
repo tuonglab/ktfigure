@@ -6640,6 +6640,7 @@ class KTFigure:
                     edgecolor=shape.color,
                     facecolor=shape.fill if shape.fill else "none",
                     linewidth=shape.line_width,
+                    linestyle=self._shape_linestyle(shape),
                 )
                 ax_main.add_patch(rect)
             elif shape.shape_type == "circle":
@@ -6655,6 +6656,7 @@ class KTFigure:
                     edgecolor=shape.color,
                     facecolor=shape.fill if shape.fill else "none",
                     linewidth=shape.line_width,
+                    linestyle=self._shape_linestyle(shape),
                 )
                 ax_main.add_patch(circle)
 
@@ -6674,14 +6676,19 @@ class KTFigure:
             )
 
     @staticmethod
+    def _shape_linestyle(shape):
+        """Translate a Tk dash pattern to matplotlib points."""
+        if not shape.dash:
+            return "-"
+        lw = max(shape.line_width, 1)
+        return (0, tuple(d * 72 / DPI / lw for d in shape.dash))
+
+    @staticmethod
     def _add_line_to_ax(ax, shape):
         """Add a line shape (with dash pattern and arrowheads) to *ax*."""
         x1, y1, x2, y2 = shape.x1, shape.y1, shape.x2, shape.y2
         length = math.hypot(x2 - x1, y2 - y1)
-        lw = max(shape.line_width, 1)
-        linestyle = "-"
-        if shape.dash:
-            linestyle = (0, tuple(d * 72 / DPI / lw for d in shape.dash))
+        linestyle = KTFigure._shape_linestyle(shape)
 
         heads = []  # (tip_x, tip_y, unit vector pointing toward the tip)
         if length > 0 and shape.arrow:
