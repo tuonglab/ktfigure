@@ -166,7 +166,7 @@ python .github/scripts/generate_showcase_figures.py
 
 ### Desktop releases
 
-Push a version tag such as `v1.0.1` to run **Build desktop apps**. It builds
+Push a version tag such as `v1.0.2` to run **Build desktop apps**. It builds
 and smoke-tests the four archives on their target platforms, then publishes them
 in a GitHub release only after all builds succeed. The workflow can also be run
 manually to build downloadable Actions artifacts without publishing a release.
