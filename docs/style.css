@@ -44,6 +44,9 @@ h1 { margin: 16px 0 20px; font-size: clamp(2.8rem, 6vw, 5rem); max-width: 850px;
 .contents { position: sticky; top: 24px; align-self: start; border-left: 1px solid var(--line); padding-left: 20px; }
 .contents p { margin: 0 0 12px; color: var(--ink); font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .contents a { display: block; padding: 4px 0; color: var(--muted); font-size: .88rem; text-decoration: none; }
+.contents a.contents-highlight { margin-top: 16px; padding: 10px 12px; color: var(--teal); font-weight: 700; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+.contents a.contents-highlight:hover { border-color: #9dc8b6; }
+.contents a.contents-highlight:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 .article section { margin-bottom: 75px; scroll-margin-top: 25px; }
 h2 { font-size: clamp(2rem, 4vw, 2.8rem); margin: 12px 0 20px; }
 h3 { font-size: 1.1rem; margin: 0 0 10px; }
