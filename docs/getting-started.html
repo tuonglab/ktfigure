@@ -67,8 +67,8 @@
           <p class="eyebrow">02 / First figure</p>
           <h2>Explore a relationship.</h2>
           <p>Make a scatter plot to see how sales vary with temperature, using colour to distinguish seasons.</p>
-          <p class="caption">The small step illustrations are schematics, not screenshots of the interface.</p>
-          <div class="note">For large scatterplots, <strong>GPU scatter preview</strong> opens a separate interactive view of numeric X and Y. It uses normalized axes and one colour rather than plot styling; the original ranges and omitted non-finite pairs appear above the plot. The artboard and export still use CPU rendering. See <a href="index.html#quick-start">Quick Start</a> for details.</div>
+          <p class="caption">The small step illustrations are schematics of the workflow.</p>
+          <div class="note">For large scatterplots, <strong>GPU scatter preview</strong> opens a separate interactive view of numeric X and Y. It uses normalized axes and a single colour; the original ranges and omitted non-finite pairs appear above the plot. The artboard and exported figure use CPU rendering. See <a href="index.html#quick-start">Quick Start</a> for details.</div>
           <ol class="steps">
             <li>Click <strong>Plot</strong> in the toolbar, then click and drag a large rectangle on the white artboard.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="A plot region being drawn on the artboard."><use href="images/step-illustrations.svg#canvas"></use></svg></li>
             <li>In the <strong>Data</strong> tab, choose <strong>Browse CSV / TSV…</strong> and open <code>example_data.csv</code>. The dialog moves to the plot configuration tab.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="The data browser opening a CSV file."><use href="images/step-illustrations.svg#browse"></use></svg></li>
@@ -91,7 +91,7 @@
           </figure>
           <div class="tips">
             <div><h3>Label for the reader</h3><p>Under <strong>Labels</strong>, try the title <em>Sales and temperature</em>, X label <em>Temperature (°C)</em>, and Y label <em>Sales</em>. Use meaningful units where available.</p></div>
-            <div><h3>Choose a restrained palette</h3><p>Under <strong>Theme &amp; Palette</strong>, try <strong>whitegrid</strong> and <strong>colorblind</strong>. Colour should identify groups, not compete with the data; check the result in grayscale too.</p></div>
+            <div><h3>Choose a restrained palette</h3><p>Under <strong>Theme &amp; Palette</strong>, try <strong>whitegrid</strong> and <strong>colorblind</strong>. Use colour to identify groups while keeping the data easy to see; check the result in grayscale too.</p></div>
             <div><h3>Keep text legible</h3><p>Use a consistent font family and size across panels. Resize the plot with its handles or the <strong>Size</strong> fields, and check labels at the final intended output size.</p></div>
             <div><h3>Reduce clutter</h3><p>Scroll to <strong>Grid &amp; Legend</strong> to turn the grid or legend on and off, change legend placement, or remove its frame. Use a legend when colour communicates a group.</p></div>
           </div>
@@ -101,7 +101,7 @@
         <section id="more-examples" data-reveal>
           <p class="eyebrow">04 / Another view</p>
           <h2>Compare distributions.</h2>
-          <p>Try a box plot to compare sales across seasons. It summarizes the median, spread and potential outliers rather than showing the relationship between two numeric variables.</p>
+          <p>Try a box plot to compare sales across seasons. It summarizes the median, spread and potential outliers for each season.</p>
           <ol class="steps">
             <li>Draw another plot region and load the same CSV, or select the scatter plot and click <strong>Edit plot</strong> to replace it.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="A selected plot beside the Edit plot control."><use href="images/step-illustrations.svg#edit"></use></svg></li>
             <li>Choose <strong>box</strong>, set X to <code>season</code>, Y to <code>sales</code>, and Hue to <strong>(none)</strong>. Click <strong>Apply</strong>.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="Box plot mappings for season and sales."><use href="images/step-illustrations.svg#box-map"></use></svg></li>

@@ -19,7 +19,7 @@
 
 ## Overview
 
-**ktfigure** is a desktop GUI application that lets researchers visually design and export figures built on top of [seaborn](https://seaborn.pydata.org/) and [matplotlib](https://matplotlib.org/). You drag plot regions onto an A4 artboard, load your CSV/TSV data, configure plot types and aesthetics through point-and-click dialogs, and export to PNG, PDF, or SVG — all without writing a single line of code.
+**ktfigure** is a desktop GUI application that lets researchers visually design and export figures built on top of [seaborn](https://seaborn.pydata.org/) and [matplotlib](https://matplotlib.org/). You drag plot regions onto an A4 artboard, load your CSV/TSV data, configure plot types and aesthetics through point-and-click dialogs, and export to PNG, PDF, or SVG.
 
 ### Supported plot types
 
@@ -53,9 +53,8 @@ No Python or Git installation is needed.
 | macOS Intel | `ktfigure-macos-x64.zip` | Extract the zip, then double-click `ktfigure.app`. |
 | Linux x86-64 | `ktfigure-linux-x64.tar.gz` | Extract the archive, then open `ktfigure/ktfigure`. A graphical desktop is required. |
 
-Keep the extracted application and its accompanying files together. These builds
-are not code-signed or notarized, so Windows SmartScreen or macOS Gatekeeper may
-warn when opening them. On macOS, if the app is blocked, open **System Settings
+Keep the extracted application and its accompanying files together. These builds are unsigned and not notarized, so Windows SmartScreen or macOS
+Gatekeeper may warn when opening them. On macOS, if the app is blocked, open **System Settings
 → Privacy & Security** and use **Open Anyway** after verifying the download.
 On Linux, if the file manager will not launch the app, allow it to run as a
 program in its properties or run `./ktfigure/ktfigure` from a terminal.
@@ -107,12 +106,12 @@ python -m ktfigure
 4. Switch to the **Plot** tab, select your plot type, and map your data columns to X, Y, and (optionally) Hue.
 5. Click **Apply** to render the plot on the canvas.
 
-> **Data format:** ktfigure only accepts tabular data stored in **CSV** or **TSV** files. Each column should represent a variable and each row an observation. Other formats (Excel, JSON, databases, etc.) are not supported.
+> **Data format:** ktfigure accepts tabular data in **CSV** or **TSV** files. Put variables in columns and observations in rows. Excel, JSON and database connections are not supported.
 
 For large scatterplots, **GPU scatter preview** opens a separate interactive
 OpenGL window for numeric X and Y. Drag to pan and use the mouse wheel to zoom.
 Its axes are normalized to 0–1 (the original ranges appear above the plot), and
-its points use one colour rather than the configured hue, size or other styling.
+its points use one colour; configured hue, size and other styling are not applied.
 Non-finite pairs are omitted and counted above the plot. This preview does not
 change the artboard or exports: those still use all data and Matplotlib on the
 CPU. The small configuration thumbnail samples 20,000 rows for large
@@ -192,7 +191,7 @@ share or ugcPost ID, as well as `lnkd.in` links that resolve to these posts.
 Short-link resolution requires access to LinkedIn's redirect service. Some
 LinkedIn links or posts may not support embedding;
 use the original post link shown on each card. The gallery retains the latest
-200 posts. No AI screening is used, although GitHub Actions runner usage may
+200 posts. Submissions are not screened with AI; GitHub Actions runner usage may
 incur charges. For a local preview, serve `docs/` over HTTP.
 
 ---
