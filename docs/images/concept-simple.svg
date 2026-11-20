@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" width="640" height="420" role="img" aria-labelledby="title desc">
+  <title id="title">A clear study concept</title>
+  <desc id="desc">Control and treatment groups are sampled at zero, twenty-four and forty-eight hours.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L7 3.5 L0 7 Z" fill="#172d35"/>
+    </marker>
+  </defs>
+  <rect width="640" height="420" fill="#fff"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#172d35">
+    <text x="320" y="51" text-anchor="middle" font-size="23" font-weight="bold">Study design</text>
+    <text x="320" y="82" text-anchor="middle" font-size="16">Samples collected at each time point</text>
+    <g fill="none" stroke="#172d35" stroke-width="3" marker-end="url(#arrow)">
+      <path d="M162 169 H191"/><path d="M285 169 H313"/><path d="M407 169 H435"/>
+      <path d="M162 277 H191"/><path d="M285 277 H313"/><path d="M407 277 H435"/>
+    </g>
+    <g stroke-width="3">
+      <rect x="28" y="136" width="134" height="66" rx="6" fill="#eaf4f8" stroke="#0173b2"/>
+      <rect x="28" y="244" width="134" height="66" rx="6" fill="#fff4e3" stroke="#b87700"/>
+      <g fill="#fff" stroke="#809b95">
+        <rect x="195" y="136" width="90" height="66" rx="6"/><rect x="317" y="136" width="90" height="66" rx="6"/><rect x="439" y="136" width="90" height="66" rx="6"/>
+        <rect x="195" y="244" width="90" height="66" rx="6"/><rect x="317" y="244" width="90" height="66" rx="6"/><rect x="439" y="244" width="90" height="66" rx="6"/>
+      </g>
+    </g>
+    <g text-anchor="middle" font-size="19" font-weight="bold">
+      <text x="95" y="176">Control</text><text x="95" y="284">Treatment</text>
+      <text x="240" y="176">0 h</text><text x="362" y="176">24 h</text><text x="484" y="176">48 h</text>
+      <text x="240" y="284">0 h</text><text x="362" y="284">24 h</text><text x="484" y="284">48 h</text>
+    </g>
+  </g>
+</svg>

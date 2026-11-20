@@ -1,0 +1,57 @@
+name: Share a community figure
+description: Submit a figure to the ktfigure community gallery.
+title: "[Gallery] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only an image you have permission to publish. The issue, your GitHub username and all comments are public, even if you leave the display name blank. Do not submit pornographic, hateful, harassing or graphically violent content. Images and text are screened with Copilot before automatic publication; flagged or unavailable reviews go to a maintainer.
+  - type: textarea
+    id: image
+    attributes:
+      label: Image
+      description: Drag and drop one JPEG or PNG here. GitHub will insert an image link. The image must be at most 10 MB before compression.
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Display name
+      description: Optional. Leave blank to display "Anonymous" in the gallery.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Optional. Describe what the figure shows.
+      placeholder: This panel compares marker expression across study groups.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback about ktfigure
+      description: Optional. Share your own experience; this text will appear on your gallery card.
+      placeholder: What did ktfigure help you create or learn?
+  - type: input
+    id: citation
+    attributes:
+      label: Paper citation
+      description: Optional. Give a short citation.
+      placeholder: Author et al., Journal, year
+  - type: input
+    id: doi
+    attributes:
+      label: DOI
+      description: Optional. Enter a DOI or a doi.org link.
+      placeholder: 10.1000/example
+  - type: input
+    id: link
+    attributes:
+      label: Paper or project URL
+      description: Optional. Use a public HTTP or HTTPS link.
+      placeholder: https://example.org/project
+  - type: checkboxes
+    id: permission
+    attributes:
+      label: Permission
+      options:
+        - label: I have permission to share this image publicly and understand it will be stored in the repository's history.
+          required: true

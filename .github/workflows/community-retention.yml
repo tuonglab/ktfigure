@@ -1,0 +1,45 @@
+name: Maintain community gallery limit
+
+on:
+  push:
+    branches: [master]
+    paths: ["docs/community/items/**"]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: community-gallery-retention
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r .github/scripts/gallery-requirements.txt
+      - run: python .github/scripts/community_gallery.py prune
+      - name: Open and merge a retention pull request if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          if git diff --quiet -- docs/community/items; then exit 0; fi
+          branch="community/retention-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add docs/community/items
+          git commit -m "Remove oldest community figures" -m "Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com>"
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base "$BASE_BRANCH" \
+            --title "Remove oldest community figures" \
+            --body "Remove the oldest entries to restore the 200-image gallery limit."
+          bash .github/scripts/merge_community_pr.sh "$branch" "$(git rev-parse HEAD)" retention

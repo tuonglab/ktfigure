@@ -1,0 +1,17 @@
+dataset,method,accuracy,runtime_min,agreement
+D1,Method A,0.81,10,0.78
+D2,Method A,0.84,12,0.82
+D3,Method A,0.79,9,0.76
+D4,Method A,0.86,14,0.83
+D5,Method A,0.82,11,0.80
+D6,Method A,0.88,16,0.86
+D7,Method A,0.80,13,0.79
+D8,Method A,0.85,15,0.84
+D1,Method B,0.84,15,0.82
+D2,Method B,0.87,18,0.85
+D3,Method B,0.82,14,0.80
+D4,Method B,0.88,20,0.87
+D5,Method B,0.85,17,0.83
+D6,Method B,0.90,23,0.89
+D7,Method B,0.83,16,0.81
+D8,Method B,0.87,21,0.86

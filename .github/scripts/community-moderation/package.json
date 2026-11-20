@@ -1,0 +1,8 @@
+{
+  "name": "ktfigure-community-moderation",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@microsoft/copilot-sdk": "2.0.1"
+  }
+}

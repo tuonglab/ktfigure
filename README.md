@@ -122,6 +122,51 @@ To regenerate the screenshots on Linux, install the package and run:
 xvfb-run -a -s "-screen 0 1600x1000x24" python .github/scripts/generate_tutorial_screenshots.py
 ```
 
+To regenerate the synthetic six-panel showcase illustrations, run:
+
+```bash
+python .github/scripts/generate_showcase_figures.py
+```
+
+### Community gallery
+
+The [community gallery](https://tuonglab.github.io/ktfigure/community.html)
+uses GitHub issues for submissions and comment threads. The issue form and its
+attachments are public, including the submitter's GitHub username, even when
+the gallery display name is anonymous. The form collects an optional figure
+description, personal feedback, citation, DOI and project link. Only share
+material you can publish.
+
+The `Prepare community figure` workflow validates GitHub-hosted JPEG/PNG
+attachments, strips image metadata, resizes and compresses a copy, and opens a
+pull request. A separate, read-only Copilot job screens the image and submission
+text for inappropriate content. Only a clear pass triggers automatic merging;
+flagged, uncertain, unavailable or exhausted-credit reviews remain open for
+human review. Screening can miss inappropriate content and must not be treated
+as a guarantee. A merge never bypasses branch rules. Workflow-created pull
+requests using `GITHUB_TOKEN` do not start the usual pull-request workflows.
+
+An organization administrator must keep **AI credits paid usage** disabled to
+prevent Copilot overage charges; the workflow cannot enforce or verify billing
+policy. If no included credits or vision-capable model are available, the
+submission remains for human review. Organization policy must also allow
+Copilot CLI usage billed to the organization, and repository administrators
+must enable **Settings → Actions → General → Workflow permissions → Allow
+GitHub Actions to create and approve pull requests**. Standard GitHub-hosted
+runners are used. If a workflow fails, inspect the run before retrying: a pull
+request may already exist or have merged.
+
+The gallery displays at most 200 figures. Submission pull requests
+remove the oldest files when necessary; a separate retention workflow proposes
+and merges cleanup if concurrent merges exceed the limit. Deletions do not
+remove files from Git history or attachments from their issues. Merges made
+with `GITHUB_TOKEN` do not trigger push workflows, so the submission and
+retention workflows explicitly dispatch Pages deployment and retention checks.
+The Pages workflow builds `docs/community/entries.json` from the individual
+metadata files. For a local preview, install
+`.github/scripts/gallery-requirements.txt`, run
+`python .github/scripts/community_gallery.py build`, then serve `docs/` over HTTP.
+
 ---
 
 ## Contributing

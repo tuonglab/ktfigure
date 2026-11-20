@@ -180,3 +180,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 *.DS_Store
+.github/scripts/community-moderation/node_modules/
