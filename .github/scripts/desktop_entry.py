@@ -37,6 +37,10 @@ def smoke_test():
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--gpu-preview":
         run_file(sys.argv[2])
+    elif sys.argv[1:] == ["--gpu-import-test"]:
+        from vispy import app
+
+        app.use_app("glfw")
     elif sys.argv[1:] == ["--gpu-smoke-test"]:
         import numpy as np
         from vispy import app
