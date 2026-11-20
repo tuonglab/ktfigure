@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import urllib.error
+from email.message import Message
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -41,6 +44,74 @@ def test_supported_post_urls(url, platform, post_id):
 def test_reject_unsupported_or_unsafe_urls(url):
     with pytest.raises(ValueError):
         posts.parse_post(url)
+
+
+def redirect(url, location, code=302):
+    headers = Message()
+    headers["Location"] = location
+    return urllib.error.HTTPError(url, code, "redirect", headers, None)
+
+
+def test_linkedin_short_link_resolves_to_post(monkeypatch):
+    short = "https://lnkd.in/p/example"
+    full = ("https://www.linkedin.com/posts/researcher_"
+            "testing-the-tutorial-share-7529538461989642240-GLTd/"
+            "?utm_source=share")
+    opener = Mock()
+    opener.open.side_effect = redirect(short, full)
+    monkeypatch.setattr(posts.urllib.request, "build_opener", lambda *_: opener)
+    post = posts.parse_post(short)
+    assert post["id"] == "share:7529538461989642240"
+    assert post["url"] == full.split("?")[0].rstrip("/")
+    assert opener.open.call_count == 1
+
+
+def test_linkedin_short_link_follows_only_safe_redirects(monkeypatch):
+    opener = Mock()
+    opener.open.side_effect = [
+        redirect("https://lnkd.in/p/first", "/second"),
+        redirect("https://lnkd.in/second", "https://www.linkedin.com/feed/update/urn:li:activity:123"),
+    ]
+    monkeypatch.setattr(posts.urllib.request, "build_opener", lambda *_: opener)
+    assert posts.parse_post("https://lnkd.in/p/first")["id"] == "activity:123"
+    assert opener.open.call_count == 2
+
+
+@pytest.mark.parametrize("target", [
+    "https://example.org/post",
+    "http://www.linkedin.com/feed/update/urn:li:activity:123",
+    "https://www.linkedin.com.evil.example/feed/update/urn:li:activity:123",
+    "https://user:pass@www.linkedin.com/feed/update/urn:li:activity:123",
+    "https://lnkd.in:444/second",
+])
+def test_linkedin_short_link_rejects_unsafe_redirects(monkeypatch, target):
+    opener = Mock()
+    opener.open.side_effect = redirect("https://lnkd.in/short", target)
+    monkeypatch.setattr(posts.urllib.request, "build_opener", lambda *_: opener)
+    with pytest.raises(ValueError, match="unsupported"):
+        posts.parse_post("https://lnkd.in/short")
+    assert opener.open.call_count == 1
+
+
+def test_linkedin_short_link_reports_network_error(monkeypatch):
+    opener = Mock()
+    opener.open.side_effect = urllib.error.URLError("network unavailable")
+    monkeypatch.setattr(posts.urllib.request, "build_opener", lambda *_: opener)
+    with pytest.raises(ValueError, match="try the full post URL"):
+        posts.parse_post("https://lnkd.in/short")
+
+
+def test_linkedin_short_link_limits_redirects(monkeypatch):
+    opener = Mock()
+
+    def redirect_again(request, timeout):
+        raise redirect(request.full_url, "/again")
+
+    opener.open.side_effect = redirect_again
+    monkeypatch.setattr(posts.urllib.request, "build_opener", lambda *_: opener)
+    with pytest.raises(ValueError, match="too many redirects"):
+        posts.parse_post("https://lnkd.in/short")
+    assert opener.open.call_count == 5
 
 
 def test_add_remove_and_reject_duplicate():
