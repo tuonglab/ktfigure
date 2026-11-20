@@ -80,6 +80,7 @@ def test_gpu_preview_launches_selected_numeric_columns():
             launch.return_value.poll.return_value = 0
             after.call_args.args[1]()
             assert not os.path.exists(path)
+            after.call_args.args[1]()
     finally:
         dialog.destroy()
         root.destroy()
@@ -229,9 +230,50 @@ def test_thumbnail_sampling_is_cleared_for_other_plot_types():
             assert "sampled" in dialog._preview_note.cget("text")
             dialog._plot_type.set("histogram")
             dialog._on_type_change()
-        assert len(render.call_args.args[0].df) == 20001
-        assert dialog._preview_note.cget("text") == ""
-        assert str(dialog._cb_y.cget("state")) == "disabled"
+            assert len(render.call_args.args[0].df) == 20001
+            assert dialog._preview_note.cget("text") == ""
+            assert str(dialog._cb_y.cget("state")) == "disabled"
+            dialog._plot_type.set("scatter")
+            dialog._on_type_change()
+        assert len(render.call_args.args[0].df) == 20000
+        assert str(dialog._cb_y.cget("state")) == "readonly"
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_large_csv_load_shows_sampled_thumbnail(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    path = tmp_path / "large.csv"
+    pd.DataFrame({"x": range(20001), "y": range(20001)}).to_csv(path, index=False)
+    try:
+        with patch("ktfigure.filedialog.askopenfilename", return_value=str(path)), \
+             patch.object(dialog, "after") as after, \
+             patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._load_file()
+            after.call_args.args[1]()
+        assert len(dialog._df) == 20001
+        assert len(render.call_args.args[0].df) == 20000
+        assert "sampled" in dialog._preview_note.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_empty_csv_reports_load_error(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    path = tmp_path / "empty.csv"
+    path.write_text("x,y\n", encoding="utf-8")
+    try:
+        with patch("ktfigure.filedialog.askopenfilename", return_value=str(path)), \
+             patch("ktfigure.messagebox.showerror") as error:
+            dialog._load_file()
+        assert "no data rows" in error.call_args.args[1]
+        assert dialog._df is None
     finally:
         dialog.destroy()
         root.destroy()
@@ -245,6 +287,24 @@ def test_scatter_thumbnail_reports_render_failure():
         with patch("ktfigure.PlotRenderer._render_to_ax", side_effect=ValueError("bad plot")):
             dialog._update_preview()
         assert "bad plot" in dialog._preview_lbl.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_scatter_thumbnail_preserves_hue_and_size_mappings():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(
+        pd.DataFrame({"x": [1], "y": [2], "group": ["A"], "size": [3]})
+    ))
+    try:
+        dialog._col_hue.set("group")
+        dialog._col_size.set("size")
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+        block = render.call_args.args[0]
+        assert (block.col_hue, block.col_size) == ("group", "size")
     finally:
         dialog.destroy()
         root.destroy()

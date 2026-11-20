@@ -76,6 +76,34 @@ def test_preview_renders_all_points_with_precise_normalization(monkeypatch):
     np.testing.assert_array_equal(drawn["positions"][[0, -1]], [[0, 0], [1, 1]])
 
 
+def test_preview_handles_constant_axis_and_text_renderer(monkeypatch):
+    pytest.importorskip("vispy")
+    pytest.importorskip("glfw")
+    from vispy import app, scene
+    from vispy.gloo import gl
+
+    app.use_app("glfw")
+    timer = app.Timer(interval=0.5, connect=lambda event: app.quit(), start=True)
+    original = scene.visuals.Markers.set_data
+    original_get = gl.glGetParameter
+    drawn = {}
+
+    def capture(self, positions, *args, **kwargs):
+        drawn["positions"] = positions.copy()
+        return original(self, positions, *args, **kwargs)
+
+    def renderer_as_text(parameter):
+        value = original_get(parameter)
+        if parameter == gl.GL_RENDERER and isinstance(value, bytes):
+            return value.decode(errors="replace")
+        return value
+
+    monkeypatch.setattr(scene.visuals.Markers, "set_data", capture)
+    monkeypatch.setattr(gl, "glGetParameter", renderer_as_text)
+    show_preview(np.array([[7.0, 1.0], [7.0, 2.0]]), "x", "y", 0)
+    np.testing.assert_array_equal(drawn["positions"], [[0, 0], [0, 1]])
+
+
 def test_run_file_passes_data_and_removes_temporary_file(tmp_path, monkeypatch):
     path = tmp_path / "preview.npz"
     np.savez(path, points=[[1, 2]], x="x", y="y", dropped=3)
