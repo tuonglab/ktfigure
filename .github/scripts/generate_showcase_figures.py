@@ -9,7 +9,9 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
+from matplotlib.ticker import MaxNLocator
 
 from ktfigure import PlotBlock, PlotRenderer
 
@@ -25,19 +27,16 @@ def plot(ax, fig, file, kind, x, y, hue, xlabel, ylabel):
     block.plot_type, block.col_x, block.col_y, block.col_hue = kind, x, y, hue
     block.aesthetics.update(
         style="white", palette="colorblind", font_family="DejaVu Sans",
-        font_size=8, xlabel=xlabel, ylabel=ylabel, legend=bool(hue),
-        legend_outside=False, legend_loc="best", grid=False,
+        font_size=8, xlabel=xlabel, ylabel=ylabel, legend=False, grid=False,
     )
     PlotRenderer.render_to_ax(block, ax, fig)
     for text in ax.texts:
         if text.get_text().startswith("Render error:"):
             raise RuntimeError(text.get_text())
     ax.tick_params(labelsize=7)
-    legend = ax.get_legend()
-    if legend:
-        legend.set_title(None)
-        for text in legend.get_texts():
-            text.set_fontsize(7)
+    if kind == "histogram":
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=3))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=(kind == "histogram")))
 
 
 def design(ax, kind):
@@ -45,19 +44,18 @@ def design(ax, kind):
     ax.set_ylim(0, 1)
     ax.axis("off")
     if kind == "timecourse":
-        ax.text(.5, .96, "Cohort and sampling", fontsize=6.5, ha="center", va="top")
         lane_colors = ("#0173b2", "#de8f05")
-        lane_centers = (.70, .31)
-        sample_x = (.34, .55, .76)
-        sample_w, sample_h = .17, .20
-        group_x, group_w, group_h = .02, .22, .20
+        lane_centers = (.70, .30)
+        sample_x = (.40, .60, .80)
+        sample_w, sample_h = .16, .20
+        group_x, group_w, group_h = .01, .30, .20
 
         for color, center, group in zip(
-            lane_colors, lane_centers, ("Control\nvehicle", "Treatment\nagent")
+            lane_colors, lane_centers, ("Control", "Treatment")
         ):
             group_y = center - group_h / 2
             nodes = [(group_x, group_y, group_w, group_h, group, color)]
-            for x, time in zip(sample_x, ("0 h\nsample", "24 h\nsample", "48 h\nsample")):
+            for x, time in zip(sample_x, ("0 h", "24 h", "48 h")):
                 nodes.append((x, center - sample_h / 2, sample_w, sample_h, time, color))
 
             for left, right in zip(nodes, nodes[1:]):
@@ -65,7 +63,8 @@ def design(ax, kind):
                 end = (right[0], center)
                 ax.annotate(
                     "", xy=end, xytext=start,
-                    arrowprops={"arrowstyle": "->", "lw": 1, "color": "#25383d"},
+                    arrowprops={"arrowstyle": "->", "lw": 1, "color": "#25383d",
+                                "shrinkA": 0, "shrinkB": 0},
                     zorder=1,
                 )
 
@@ -76,18 +75,15 @@ def design(ax, kind):
                 ))
                 ax.text(
                     x + width / 2, y + height / 2, label, ha="center", va="center",
-                    fontsize=6.2, color="#172d35", linespacing=1.15, zorder=3,
+                    fontsize=6, color="#172d35", zorder=3,
                 )
     else:
-        ax.text(.5, .96, "Analysis pipeline", fontsize=6.5, ha="center", va="top")
         boxes = [
-            (.02, .39, .14, .22, "Matched\ndatasets"),
-            (.21, .39, .17, .22, "QC +\nprocessing"),
-            (.42, .67, .15, .20, "Method A"),
-            (.42, .13, .15, .20, "Method B"),
-            (.63, .67, .15, .20, "Score\nruns"),
-            (.63, .13, .15, .20, "Score\nruns"),
-            (.84, .34, .15, .32, "Compare\nmatched runs"),
+            (.20, .79, .60, .16, "Matched datasets"),
+            (.20, .56, .60, .16, "QC + processing"),
+            (.04, .31, .40, .16, "Method A"),
+            (.56, .31, .40, .16, "Method B"),
+            (.20, .05, .60, .16, "Score and compare"),
         ]
         color = "#25383d"
 
@@ -102,17 +98,15 @@ def design(ax, kind):
             )
 
         # A shared input branches into parallel methods, then rejoins for comparison.
-        arrow((.16, .50), (.21, .50))
-        ax.plot([.38, .40], [.50, .50], color=color, lw=1, zorder=1)
-        ax.plot([.40, .40], [.23, .77], color=color, lw=1, zorder=1)
-        arrow((.40, .77), (.42, .77))
-        arrow((.40, .23), (.42, .23))
-        arrow((.57, .77), (.63, .77))
-        arrow((.57, .23), (.63, .23))
-        ax.plot([.78, .80], [.77, .77], color=color, lw=1, zorder=1)
-        ax.plot([.78, .80], [.23, .23], color=color, lw=1, zorder=1)
-        ax.plot([.80, .80], [.23, .77], color=color, lw=1, zorder=1)
-        arrow((.80, .50), (.84, .50))
+        arrow((.50, .79), (.50, .72))
+        ax.plot([.50, .50], [.56, .52], color=color, lw=1, zorder=1)
+        ax.plot([.24, .76], [.52, .52], color=color, lw=1, zorder=1)
+        arrow((.24, .52), (.24, .47))
+        arrow((.76, .52), (.76, .47))
+        ax.plot([.24, .24], [.31, .26], color=color, lw=1, zorder=1)
+        ax.plot([.76, .76], [.31, .26], color=color, lw=1, zorder=1)
+        ax.plot([.24, .76], [.26, .26], color=color, lw=1, zorder=1)
+        arrow((.50, .26), (.50, .21))
 
         for x, y, width, height, label in boxes:
             ax.add_patch(Rectangle(
@@ -127,23 +121,21 @@ def design(ax, kind):
 
 def make_figure(kind, cases):
     fig = plt.figure(figsize=(7.09, 6.2))
-    grid = fig.add_gridspec(3, 4)
-    axes = [
-        fig.add_subplot(grid[0, :]),
-        fig.add_subplot(grid[1, 0]),
-        fig.add_subplot(grid[1, 1]),
-        fig.add_subplot(grid[1, 2]),
-        fig.add_subplot(grid[2, :2]),
-        fig.add_subplot(grid[2, 2:]),
-    ]
-    fig.subplots_adjust(left=.09, right=.97, bottom=.07, top=.94, wspace=.75, hspace=.8)
+    axes = [fig.add_axes([x, y, .22, .28])
+            for y in (.60, .16) for x in (.12, .42, .72)]
     design(axes[0], kind)
     for ax, case in zip(axes[1:], cases):
         plot(ax, fig, *case)
     for label, ax in zip("ABCDEF", axes):
-        label_x = -.01 if label == "A" else -.16
-        ax.text(label_x, 1.10, label, transform=ax.transAxes,
+        ax.text(-.18, 1.09, label, transform=ax.transAxes,
                 fontsize=10, fontweight="bold", va="top", clip_on=False)
+    labels = ("Control", "Treatment") if kind == "timecourse" else ("Method A", "Method B")
+    handles = [
+        Line2D([], [], marker="o", linestyle="none", markersize=5, color=color, label=label)
+        for color, label in zip(("#0173b2", "#de8f05"), labels)
+    ]
+    fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(.94, .985),
+               ncol=2, frameon=False, fontsize=7, handletextpad=.4, columnspacing=1.2)
     path = OUTPUT / f"showcase-{kind}.svg"
     fig.savefig(path, format="svg")
     path.write_text(
@@ -157,15 +149,15 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     make_figure("timecourse", [
         ("timecourse.csv", "line", "time_h", "response", "group", "Time (h)", "Response (a.u.)"),
-        ("timecourse-endpoints.csv", "strip", "group", "endpoint", None, "", "48 h response (a.u.)"),
+        ("timecourse-endpoints.csv", "strip", "group", "endpoint", None, "Group", "48 h response (a.u.)"),
         ("timecourse-endpoints.csv", "scatter", "baseline", "endpoint", "group", "Baseline (a.u.)", "48 h response (a.u.)"),
         ("timecourse-endpoints.csv", "scatter", "biomarker", "change", "group", "Biomarker (a.u.)", "Change (a.u.)"),
         ("timecourse-endpoints.csv", "histogram", "change", None, "group", "Change (a.u.)", "Count"),
     ])
     make_figure("methods", [
-        ("methods-benchmark.csv", "strip", "method", "accuracy", None, "", "Accuracy (fraction)"),
+        ("methods-benchmark.csv", "strip", "method", "accuracy", None, "Method", "Accuracy (fraction)"),
         ("methods-benchmark.csv", "scatter", "runtime_min", "accuracy", "method", "Runtime (min)", "Accuracy (fraction)"),
-        ("methods-benchmark.csv", "box", "method", "runtime_min", None, "", "Runtime (min)"),
+        ("methods-benchmark.csv", "box", "method", "runtime_min", None, "Method", "Runtime (min)"),
         ("methods-benchmark.csv", "scatter", "agreement", "accuracy", "method", "Agreement (fraction)", "Accuracy (fraction)"),
         ("methods-benchmark.csv", "histogram", "accuracy", None, "method", "Accuracy (fraction)", "Count"),
     ])

@@ -38,6 +38,7 @@
         <div class="actions action-choices" aria-label="Showcase sections">
           <a class="button button-secondary" href="#design">Panel A: study design <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#results">Panels B–F: results <span aria-hidden="true">↓</span></a>
+          <a class="button button-secondary" href="#whitespace">Use whitespace <span aria-hidden="true">↓</span></a>
           <a class="text-link" href="data/timecourse.csv" download>Download the synthetic data ↓</a>
         </div>
       </div>
@@ -48,6 +49,7 @@
         <a href="#plan">The figure story</a>
         <a href="#design">A · Study design</a>
         <a href="#results">B–F · Results</a>
+        <a href="#whitespace">Use whitespace</a>
       </aside>
       <div class="article">
         <section id="plan" data-reveal>
@@ -56,7 +58,7 @@
           <p>This six-panel storyboard moves from the treatment groups and sampling times to a response trajectory, endpoint observations and exploratory relationships. Download <a href="data/timecourse.csv" download>timecourse.csv</a> and <a href="data/timecourse-endpoints.csv" download>timecourse-endpoints.csv</a>. Each group has four fictional subjects measured at 0, 24 and 48 hours; values and units are illustrative, not experimental evidence.</p>
           <figure>
             <img src="images/showcase-timecourse.svg" alt="Six-panel figure with a boxed two-group sampling timeline, response over time, endpoint observations, baseline versus endpoint, biomarker versus change, and a change histogram." loading="lazy">
-            <figcaption>Illustrative layout rendered with ktfigure plots and vector-drawn concepts. Synthetic data only.</figcaption>
+            <figcaption>Illustrative layout rendered with ktfigure plots and vector-drawn concepts. A shared key sits outside the panels; synthetic data only.</figcaption>
           </figure>
           <div class="figure-map" aria-label="Six-panel time-course storyboard">
             <div><b>A</b><strong>Study design</strong><span>Groups → sampling times</span></div>
@@ -66,13 +68,13 @@
             <div><b>E</b><strong>Biomarker vs change</strong><span>Explore association</span></div>
             <div><b>F</b><strong>Change distribution</strong><span>Spread by group</span></div>
           </div>
-          <p class="caption">Panel A spans the first row to keep the study schedule legible; B–D follow in the second row, with E–F below.</p>
+          <p class="caption">A–C occupy the first row and D–F the second. Panel A fits within the same grid as the plots, without squeezing out its labels.</p>
         </section>
         <section id="design" data-reveal>
           <p class="eyebrow">Panel A / Concept figure</p>
           <h2>Draw the design as two swimlanes.</h2>
           <ol class="steps">
-            <li>Place a <strong>Rectangle</strong> at the left of each lane for the group and treatment condition (for example, Control / vehicle and Treatment / agent). Keep the wording faithful to the real protocol.</li>
+            <li>Place a <strong>Rectangle</strong> at the left of each lane for the group (Control and Treatment). If treatment conditions matter, describe them in the legend; keep all wording faithful to the real protocol.</li>
             <li>Add three same-sized sample boxes along each lane for 0, 24 and 48 h. Draw a <strong>Line</strong> with an arrowhead from the group box through the time points. Keep connector segments in the gaps between boxes, so they do not pass behind labels or through the shapes.</li>
             <li>Use <strong>Text</strong> inside the boxes for group and sample labels; align the rows and keep spacing, border colour and line weight consistent. Label the measured outcome below the lanes only if it applies at every time point.</li>
           </ol>
@@ -81,7 +83,7 @@
         <section id="results" data-reveal>
           <p class="eyebrow">Panels B–F / Show the evidence</p>
           <h2>Choose the plot for the question.</h2>
-          <p>In ktfigure, draw a plot region, load the named CSV in <strong>Data</strong>, select the plot type and map the listed columns. Set other mapping fields to <strong>(none)</strong>. Use the Properties panel to apply the same font and colour mapping across panels.</p>
+          <p>In ktfigure, draw a plot region, load the named CSV in <strong>Data</strong>, select the plot type and map the listed columns. Set other mapping fields to <strong>(none)</strong>. Use Properties to apply the same font and colour mapping across panels. The illustration uses one shared group key above the panels instead of legends covering observations; turn off individual legends in <strong>Grid &amp; Legend</strong> and add the shared key in a vector editor after export.</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Panel / question</th><th>Plot and mappings</th><th>Why this view?</th></tr></thead>
             <tbody>
@@ -93,6 +95,17 @@
             </tbody>
           </table></div>
           <p><code>change</code> is the 48 h value minus baseline. Do not treat repeated time points as independent subjects. Describe sample size, biological versus technical replicates, uncertainty and statistical methods in the legend. Verify the line plot's uncertainty display before describing it; seaborn defaults can vary by version.</p>
+        </section>
+        <section id="whitespace" data-reveal>
+          <p class="eyebrow">Layout lesson / Whitespace</p>
+          <h2>Make the gaps do useful work.</h2>
+          <p>Whitespace separates comparisons and gives axes and labels room to breathe. Too little makes the figure crowded; too much makes related panels look disconnected. The aim is intentional spacing, not simply filling every empty area.</p>
+          <ol class="steps">
+            <li><strong>Plan the grid.</strong> Reserve a two-row, three-column area for A–F. Give the concept panel its own cell, shorten its labels to the essential groups and times, and move protocol details to the legend instead of shrinking text to fit.</li>
+            <li><strong>Align the plots.</strong> In Select mode, Shift-click the plot blocks in each row and use <strong>Align</strong>, then <strong>Distribute</strong>. Repeat for the columns; leave consistent gutters wide enough for axis labels. Align the concept panel's outer edge and its panel letter with the grid.</li>
+            <li><strong>Keep evidence clear.</strong> Place a single colour key in the margin rather than over points, using the same group colours in every panel. Export to PDF or SVG, add the key and A–F labels in a vector editor, and check that no tick labels, legends or text touch neighbouring plots.</li>
+            <li><strong>Use space where it matters.</strong> Inspect at the journal's final width and adjust gutters or panel dimensions before reducing type. If the concept is too detailed to remain legible, simplify it or give it more room rather than clipping labels.</li>
+          </ol>
           <div class="end"><p>Ready to check the final figure?</p><a href="checklist.html">Open the publication checklist →</a></div>
         </section>
       </div>

@@ -38,6 +38,7 @@
         <div class="actions action-choices" aria-label="Showcase sections">
           <a class="button button-secondary" href="#pipeline">Panel A: workflow pipeline <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#results">Panels B–F: results <span aria-hidden="true">↓</span></a>
+          <a class="button button-secondary" href="#prime-real-estate">Prime real estate <span aria-hidden="true">↓</span></a>
           <a class="text-link" href="data/methods-benchmark.csv" download>Download synthetic benchmark data ↓</a>
         </div>
       </div>
@@ -48,6 +49,7 @@
         <a href="#story">The figure story</a>
         <a href="#pipeline">A · Workflow pipeline</a>
         <a href="#results">B–F · Benchmark results</a>
+        <a href="#prime-real-estate">Prime real estate</a>
       </aside>
       <div class="article">
         <section id="story" data-reveal>
@@ -56,7 +58,7 @@
           <p>This six-panel storyboard introduces the inputs, quality checks, parallel methods and evaluation before showing accuracy, runtime, agreement and score distributions. Download <a href="data/methods-benchmark.csv" download>methods-benchmark.csv</a>. It contains fictional results for two methods on eight matched datasets; each row is one method–dataset run. These values are illustrative, not validation of a real method.</p>
           <figure>
             <img src="images/showcase-methods.svg" alt="Six-panel example with a pipeline from matched datasets through quality control and preprocessing, two parallel methods, scoring and comparison, followed by accuracy, runtime, agreement and score-distribution plots." loading="lazy">
-            <figcaption>Illustrative finished figure using ktfigure's plot renderer and vector-drawn concepts. Synthetic benchmark data only.</figcaption>
+            <figcaption>Illustrative figure using ktfigure's plot renderer and vector-drawn concepts, with a shared key outside the panels. Synthetic benchmark data only.</figcaption>
           </figure>
           <div class="figure-map" aria-label="Six-panel methods-comparison storyboard">
             <div><b>A</b><strong>Analysis workflow</strong><span>Matched data → QC → methods → comparison</span></div>
@@ -66,13 +68,13 @@
             <div><b>E</b><strong>Agreement</strong><span>Accuracy vs agreement</span></div>
             <div><b>F</b><strong>Score distribution</strong><span>Overlapping ranges</span></div>
           </div>
-          <p class="caption">Panel A spans the first row to keep the pipeline legible; B–D compare individual results in the second row, with E–F below.</p>
+          <p class="caption">A–C occupy the first row and D–F the second. The compact pipeline has its own cell; B and C put the main benchmark comparisons near the top.</p>
         </section>
         <section id="pipeline" data-reveal>
           <p class="eyebrow">Panel A / Concept figure</p>
           <h2>Draw a branching analysis pipeline.</h2>
           <ol class="steps">
-            <li>Make a left-to-right pipeline from <strong>Rectangle</strong> boxes: “Matched datasets” → “QC + processing” → branch into parallel “Method A” and “Method B” boxes → “Score runs”. Add a final comparison box for matched datasets and the metrics you actually evaluate.</li>
+            <li>Stack <strong>Rectangle</strong> boxes for “Matched datasets” and “QC + processing”. Below them, put “Method A” and “Method B” side by side, followed by a shared “Score and compare” box. Define the metrics in the figure legend.</li>
             <li>Use <strong>Line</strong> segments to connect boxes. Draw the shared input path first, branch into the method lanes, then bring the scored results together. Route connectors through the gaps between boxes; do not run lines beneath text or through box interiors.</li>
             <li>Place short <strong>Text</strong> labels centered inside each box. Keep box sizes, padding and border widths consistent. Label arrows only if the words fit clearly in open space and describe the actual workflow.</li>
           </ol>
@@ -81,7 +83,7 @@
         <section id="results" data-reveal>
           <p class="eyebrow">Panels B–F / Benchmark evidence</p>
           <h2>Show the trade-offs, not just a winner.</h2>
-          <p>Load <code>methods-benchmark.csv</code> for each plot and leave unspecified mappings at <strong>(none)</strong>. In Properties, use the same group colours and typography across panels.</p>
+          <p>Load <code>methods-benchmark.csv</code> for each plot and leave unspecified mappings at <strong>(none)</strong>. In Properties, use the same group colours and typography across panels. The illustration uses one shared method key above the panels rather than legends over the points; turn off individual legends in <strong>Grid &amp; Legend</strong> and add the shared key in a vector editor after export.</p>
           <div class="table-wrap"><table>
             <thead><tr><th>Panel / question</th><th>Plot and mappings</th><th>Why this view?</th></tr></thead>
             <tbody>
@@ -93,6 +95,17 @@
             </tbody>
           </table></div>
           <p>The plots do not connect matched pairs. For paired comparisons, calculate per-dataset differences with an appropriate analysis outside ktfigure and state how pairing was handled. Define metrics, data splits, hardware and runtime measurement in the legend; do not claim general performance from this toy benchmark.</p>
+        </section>
+        <section id="prime-real-estate" data-reveal>
+          <p class="eyebrow">Layout lesson / Prime real estate</p>
+          <h2>Put the main evidence where it is found first.</h2>
+          <p>Readers often start near the upper left and scan across, although reading order and journal layouts vary. Use that prominent area for the context and evidence needed to understand the message—not merely the most striking result.</p>
+          <ol class="steps">
+            <li><strong>Write the takeaway.</strong> Decide what the comparison is intended to show, such as the accuracy–runtime trade-off. Keep the claim proportional to the data, not stronger than the benchmark supports.</li>
+            <li><strong>Give the story a route.</strong> Here A provides the compact workflow, while B and C put individual accuracy and the trade-off beside it in the first row. D–F add supporting context. If your main result needs more room, enlarge it and rearrange supporting panels rather than shrinking its labels.</li>
+            <li><strong>Build the grid.</strong> Draw the plot regions, then Shift-click objects in Select mode and use <strong>Align</strong> and <strong>Distribute</strong> to line up rows and columns. Keep adequate gaps for axes and place the method key outside the data area. After PDF/SVG export, add the panel letters, shared key and concept labels in a vector editor.</li>
+            <li><strong>Check the hierarchy honestly.</strong> View the figure at final size and follow A–F without reading the caption. Can a reader find the main comparison and still see variability, overlap and limitations? Do not use colour, cropping or axis scales to exaggerate the result.</li>
+          </ol>
           <div class="end"><p>Ready to check the final figure?</p><a href="checklist.html">Open the publication checklist →</a></div>
         </section>
       </div>
