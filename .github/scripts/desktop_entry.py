@@ -41,13 +41,20 @@ if __name__ == "__main__":
         from vispy import app
 
         app.use_app("glfw")
-    elif sys.argv[1:] == ["--gpu-smoke-test"]:
-        import numpy as np
-        from vispy import app
+    elif len(sys.argv) == 3 and sys.argv[1] == "--gpu-smoke-test":
+        try:
+            import numpy as np
+            from vispy import app
 
-        app.use_app("glfw")
-        timer = app.Timer(interval=1, connect=lambda event: app.quit(), start=True)
-        show_preview(np.array([[0.0, 0.0], [1.0, 1.0]]), "x", "y", 0)
+            app.use_app("glfw")
+            timer = app.Timer(interval=1, connect=lambda event: app.quit(), start=True)
+            show_preview(np.array([[0.0, 0.0], [1.0, 1.0]]), "x", "y", 0)
+        except Exception:
+            import traceback
+
+            with open(sys.argv[2], "w", encoding="utf-8") as log:
+                traceback.print_exc(file=log)
+            sys.exit(1)
     elif sys.argv[1:] == ["--smoke-test"]:
         smoke_test()
     else:

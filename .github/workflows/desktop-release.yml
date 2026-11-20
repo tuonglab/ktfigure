@@ -87,10 +87,18 @@ jobs:
             tests=(--smoke-test --gpu-import-test)
           fi
           for test in "${tests[@]}"; do
+            args=("$executable" "$test")
+            if [ "$test" = "--gpu-smoke-test" ]; then
+              args+=("gpu-smoke-error.log")
+            fi
             if [ "${{ matrix.platform }}" = "linux" ]; then
-              xvfb-run -a python -c 'import subprocess, sys; subprocess.run(sys.argv[1:], check=True, timeout=120)' "$executable" "$test"
+              runner=(xvfb-run -a)
             else
-              python -c 'import subprocess, sys; subprocess.run(sys.argv[1:], check=True, timeout=120)' "$executable" "$test"
+              runner=()
+            fi
+            if ! "${runner[@]}" python -c 'import subprocess, sys; subprocess.run(sys.argv[1:], check=True, timeout=120)' "${args[@]}"; then
+              if [ -f gpu-smoke-error.log ]; then cat gpu-smoke-error.log; fi
+              exit 1
             fi
           done
       - uses: actions/upload-artifact@v4
