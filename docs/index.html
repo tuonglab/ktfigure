@@ -13,6 +13,8 @@
     <a class="brand" href="index.html">ktfigure <span>tutorial</span></a>
     <nav aria-label="Main navigation">
       <a href="index.html" aria-current="page">Home</a>
+      <a href="#installation">Installation</a>
+      <a href="#quick-start">Quick Start</a>
       <details class="nav-dropdown">
         <summary>Tutorials</summary>
         <div class="nav-menu">
@@ -34,9 +36,36 @@
         <h1>Thoughtful figures,<br>without writing code.</h1>
         <p class="lead">Learn the basics, then build biomedical publication figures that make the evidence easy to follow without overstating it.</p>
         <div class="actions">
-          <a class="button" href="#learn-title">Choose your path <span aria-hidden="true">↓</span></a>
+          <a class="button" href="#installation">Installation <span aria-hidden="true">↓</span></a>
+          <a class="button button-secondary" href="#quick-start">Quick Start <span aria-hidden="true">↓</span></a>
+          <a class="text-link" href="#learn-title">Explore the tutorials ↓</a>
         </div>
       </div>
+    </section>
+    <section class="home-content home-guide" id="installation" aria-labelledby="installation-title">
+      <p class="eyebrow">Install ktfigure</p>
+      <h2 id="installation-title">Get ready to create.</h2>
+      <p>You'll need <strong>Python 3.10 or later</strong>, Git and Tkinter. In a terminal, clone the repository and install ktfigure:</p>
+      <pre><code>git clone https://github.com/tuonglab/ktfigure.git
+cd ktfigure
+pip install .</code></pre>
+      <div class="note">
+        <strong>Need Tkinter?</strong> On Ubuntu/Debian, run <code>sudo apt-get install python3-tk</code>; on Fedora, run <code>sudo dnf install python3-tkinter</code>. On macOS and Windows, Tkinter is included with the standard <a href="https://www.python.org/downloads/">python.org installer</a>.
+      </div>
+      <a class="button button-secondary" href="#quick-start">Continue to Quick Start <span aria-hidden="true">↓</span></a>
+    </section>
+    <section class="home-content home-guide" id="quick-start" aria-labelledby="quick-start-title">
+      <p class="eyebrow">Quick Start</p>
+      <h2 id="quick-start-title">Make your first plot.</h2>
+      <p>After installation, launch ktfigure from your terminal:</p>
+      <pre><code>ktfigure</code></pre>
+      <ol class="steps">
+        <li>Click <strong>Plot</strong>, then drag a rectangle on the artboard to create a plot region.</li>
+        <li>In the <strong>Data</strong> tab, browse for a CSV or TSV. Try <a href="https://raw.githubusercontent.com/tuonglab/ktfigure/master/example_data.csv" download>example_data.csv</a> or use the copy in the cloned repository.</li>
+        <li>Choose <strong>scatter</strong>, map <code>temperature</code> to X, <code>sales</code> to Y and <code>season</code> to Hue, then click <strong>Apply</strong>.</li>
+        <li>Select the plot to adjust its properties, then choose <strong>PDF</strong>, <strong>SVG</strong> or <strong>PNG</strong> to export. Review the <a href="getting-started.html#layout-export">export notes</a> before publishing.</li>
+      </ol>
+      <a class="button" href="#learn-title">Explore the tutorials <span aria-hidden="true">↓</span></a>
     </section>
     <section class="home-content" aria-labelledby="learn-title">
       <p class="eyebrow">Choose a path</p>

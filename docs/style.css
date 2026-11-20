@@ -72,6 +72,7 @@ figcaption { margin-top: 10px; font-size: .86rem; color: var(--muted); }
 .end p { margin-bottom: 6px; font-weight: 800; font-size: 1.2rem; }
 .home-content { max-width: 1200px; margin: auto; padding: 70px 5% 90px; }
 .home-content h2 { margin: 12px 0 28px; font-size: clamp(2rem, 4vw, 2.8rem); }
+.home-guide { max-width: 900px; padding-top: 40px; scroll-margin-top: 25px; }
 .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .home-card { display: flex; flex-direction: column; min-height: 230px; padding: 24px; color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 8px; background: white; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .home-card:hover, .showcase-card:hover { color: var(--ink); border-color: #9dc8b6; box-shadow: 0 12px 28px #1a3e2e12; transform: translateY(-3px); }
