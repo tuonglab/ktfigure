@@ -57,6 +57,9 @@ pip install .
 
 ## Quick Start
 
+For a step-by-step guide with screenshots and styling examples, see the
+[ktfigure tutorial](https://tuonglab.github.io/ktfigure/).
+
 ### 1. Launch the application
 
 After installation, run either of the following commands:
@@ -85,11 +88,11 @@ python -m ktfigure
 
 ### 3. Annotate (optional)
 
-Use the **Shape** and **Text** toolbar modes to add lines, rectangles, circles, or text labels to your figure.
+Use the **Line**, **Rectangle**, **Circle**, and **Text** toolbar modes to add annotations to your figure.
 
 ### 4. Export
 
-Go to **File → Export** and choose PNG, PDF, or SVG.
+Click **PNG**, **PDF**, or **SVG** in the toolbar.
 
 ---
 
@@ -102,6 +105,22 @@ Go to **File → Export** and choose PNG, PDF, or SVG.
 | Cut / Copy / Paste | `Cmd X/C/V` | `Ctrl X/C/V` |
 | Select All | `Cmd A` | `Ctrl A` |
 | Delete selected | `Delete` / `Backspace` | `Delete` / `Backspace` |
+
+---
+
+## Tutorial website
+
+The static tutorial lives in `docs/`. To publish it, set **Settings → Pages →
+Build and deployment → Source** to **GitHub Actions**. The `Publish tutorial`
+workflow deploys changes to `docs/` pushed to `master`; it can also be run
+manually from the Actions tab. Repository administrators may need to enable
+Pages and approve the `github-pages` environment.
+
+To regenerate the screenshots on Linux, install the package and run:
+
+```bash
+xvfb-run -a -s "-screen 0 1600x1000x24" python .github/scripts/generate_tutorial_screenshots.py
+```
 
 ---
 
