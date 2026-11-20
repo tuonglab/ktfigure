@@ -87,22 +87,22 @@ def design(ax, kind):
             (.42, .13, .15, .20, "Method B"),
             (.63, .67, .15, .20, "Score\nruns"),
             (.63, .13, .15, .20, "Score\nruns"),
-            (.84, .34, .15, .32, "Compare\nmatched runs\nAccuracy · runtime\n· agreement"),
+            (.84, .34, .15, .32, "Compare\nmatched runs"),
         ]
         color = "#25383d"
 
         def arrow(start, end):
             ax.annotate(
                 "", xy=end, xytext=start,
-                arrowprops={"arrowstyle": "->", "lw": 1, "color": color},
+                arrowprops={
+                    "arrowstyle": "->", "lw": 1, "color": color,
+                    "shrinkA": 0, "shrinkB": 0,
+                },
                 zorder=1,
             )
 
         # A shared input branches into parallel methods, then rejoins for comparison.
-        ax.annotate(
-            "", xy=(.28, .795), xytext=(.22, .795),
-            arrowprops={"arrowstyle": "->", "lw": 1, "color": color}, zorder=1,
-        )
+        arrow((.16, .50), (.21, .50))
         ax.plot([.38, .40], [.50, .50], color=color, lw=1, zorder=1)
         ax.plot([.40, .40], [.23, .77], color=color, lw=1, zorder=1)
         arrow((.40, .77), (.42, .77))
@@ -126,27 +126,22 @@ def design(ax, kind):
 
 
 def make_figure(kind, cases):
-    if kind == "methods":
-        fig = plt.figure(figsize=(7.09, 6.2))
-        grid = fig.add_gridspec(3, 4)
-        axes = [
-            fig.add_subplot(grid[0, :]),
-            fig.add_subplot(grid[1, 0]),
-            fig.add_subplot(grid[1, 1]),
-            fig.add_subplot(grid[1, 2]),
-            fig.add_subplot(grid[2, :2]),
-            fig.add_subplot(grid[2, 2:]),
-        ]
-        fig.subplots_adjust(left=.09, right=.97, bottom=.07, top=.94, wspace=.75, hspace=.8)
-    else:
-        fig, axes = plt.subplots(2, 3, figsize=(7.09, 5.1))
-        axes = list(axes.flat)
-        fig.subplots_adjust(left=.09, right=.97, bottom=.10, top=.92, wspace=.55, hspace=.65)
+    fig = plt.figure(figsize=(7.09, 6.2))
+    grid = fig.add_gridspec(3, 4)
+    axes = [
+        fig.add_subplot(grid[0, :]),
+        fig.add_subplot(grid[1, 0]),
+        fig.add_subplot(grid[1, 1]),
+        fig.add_subplot(grid[1, 2]),
+        fig.add_subplot(grid[2, :2]),
+        fig.add_subplot(grid[2, 2:]),
+    ]
+    fig.subplots_adjust(left=.09, right=.97, bottom=.07, top=.94, wspace=.75, hspace=.8)
     design(axes[0], kind)
     for ax, case in zip(axes[1:], cases):
         plot(ax, fig, *case)
     for label, ax in zip("ABCDEF", axes):
-        label_x = -.01 if kind == "methods" and label == "A" else -.16
+        label_x = -.01 if label == "A" else -.16
         ax.text(label_x, 1.10, label, transform=ax.transAxes,
                 fontsize=10, fontweight="bold", va="top", clip_on=False)
     path = OUTPUT / f"showcase-{kind}.svg"
