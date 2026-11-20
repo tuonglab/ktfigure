@@ -128,6 +128,31 @@ To regenerate the synthetic six-panel showcase illustrations, run:
 python .github/scripts/generate_showcase_figures.py
 ```
 
+### Community gallery
+
+The [community gallery](https://tuonglab.github.io/ktfigure/community.html)
+uses GitHub issues for submissions and comment threads. The issue form and its
+attachments are public, including the submitter's GitHub username, even when
+the gallery display name is anonymous. Only share material you can publish.
+
+The `Prepare community figure` workflow validates GitHub-hosted JPEG/PNG
+attachments, strips image metadata, resizes and compresses a copy, and opens a
+pull request for review. Repository administrators must enable **Settings →
+Actions → General → Workflow permissions → Allow GitHub Actions to create and
+approve pull requests**. A workflow-created pull request using `GITHUB_TOKEN`
+does not automatically start the usual pull-request workflows; maintainers
+should review and validate it before merging. If preparation fails, check the
+Actions run and rerun it after the problem is addressed.
+
+The gallery displays at most 200 approved figures. Submission pull requests
+remove the oldest files when necessary; a separate retention workflow proposes
+cleanup if concurrent merges exceed the limit. Those deletions require review
+and do not remove files from Git history or attachments from their issues.
+The Pages workflow builds `docs/community/entries.json` from the individual
+metadata files. For a local preview, install
+`.github/scripts/gallery-requirements.txt`, run
+`python .github/scripts/community_gallery.py build`, then serve `docs/` over HTTP.
+
 ---
 
 ## Contributing

@@ -1,0 +1,42 @@
+name: Share a community figure
+description: Submit a figure to the ktfigure community gallery.
+title: "[Gallery] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only an image you have permission to publish. The issue, your GitHub username and all comments are public, even if you leave the display name blank. Submissions are reviewed before appearing in the gallery.
+  - type: textarea
+    id: image
+    attributes:
+      label: Image
+      description: Drag and drop one JPEG or PNG here. GitHub will insert an image link. The image must be at most 10 MB before compression.
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Display name
+      description: Optional. Leave blank to display "Anonymous" in the gallery.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Optional. Describe your figure or share a short message.
+  - type: input
+    id: citation
+    attributes:
+      label: Paper citation
+      description: Optional. Give a short citation.
+  - type: input
+    id: link
+    attributes:
+      label: Paper or project URL
+      description: Optional. Use a public HTTP or HTTPS link.
+  - type: checkboxes
+    id: permission
+    attributes:
+      label: Permission
+      options:
+        - label: I have permission to share this image publicly and understand it will be stored in the repository's history.
+          required: true

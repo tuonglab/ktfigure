@@ -105,6 +105,15 @@ tbody th { min-width: 130px; }
 .concept-comparison figure { margin: 14px 0; }
 .concept-comparison figure img { width: 100%; box-shadow: none; }
 .concept-comparison figcaption { line-height: 1.45; }
+.community-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.community-card { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.community-card > img, .community-card > svg { display: block; width: 100%; height: 190px; object-fit: contain; background: var(--paper); border-bottom: 1px solid var(--line); }
+.community-card > svg { padding: 18px; }
+.community-card-content { padding: 20px; overflow-wrap: anywhere; }
+.community-card-content h3 { margin: 8px 0; }
+.community-card-content p { white-space: pre-wrap; }
+.community-discussion { display: block; margin-top: 16px; font-weight: 700; }
+.community-share, .community-examples { margin-top: 80px; scroll-margin-top: 25px; }
 .example-layout { height: 190px; padding: 10px; border: 1px solid var(--line); background: white; }
 .example-layout span { display: block; border: 1px solid #9db8ac; }
 .good { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -128,7 +137,9 @@ footer { border-top: 1px solid var(--line); padding: 25px 5%; color: var(--muted
   .comparison { grid-template-columns: 1fr; }
   .home-grid { grid-template-columns: 1fr; }
   .showcase-card { grid-template-columns: 1fr; gap: 12px; }
+  .community-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (max-width: 500px) { .community-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .has-motion [data-reveal] { opacity: 1; transform: none; }
