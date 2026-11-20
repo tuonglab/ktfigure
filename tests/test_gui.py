@@ -84,6 +84,22 @@ def test_gpu_preview_launches_selected_numeric_columns():
         root.destroy()
 
 
+def test_large_scatter_thumbnail_samples_without_changing_data():
+    root = tk.Tk()
+    root.withdraw()
+    block = make_sample_block(pd.DataFrame({"x": range(20001), "y": range(20001)}))
+    dialog = PlotConfigDialog(root, block)
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+        assert len(render.call_args.args[0].df) == 20000
+        assert len(dialog._df) == 20001
+        assert "sampled" in dialog._preview_note.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
 # ---------------------------------------------------------------------------
 # StyledButton
 # ---------------------------------------------------------------------------

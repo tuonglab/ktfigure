@@ -41,8 +41,8 @@ def show_preview(points, x_label, y_label, dropped):
     canvas = scene.SceneCanvas(keys="interactive", size=(900, 700), show=True, bgcolor="white")
     grid = canvas.central_widget.add_grid(spacing=0)
     info = scene.Label(
-        f"{x_label}: {minimum[0]:.6g} to {maximum[0]:.6g}    "
-        f"{y_label}: {minimum[1]:.6g} to {maximum[1]:.6g}\n"
+        f"{x_label}: {minimum[0]:.17g} to {maximum[0]:.17g}    "
+        f"{y_label}: {minimum[1]:.17g} to {maximum[1]:.17g}\n"
         f"{len(points):,} points; {dropped:,} non-finite pairs omitted. "
         "Single-colour preview; styling and exports are unchanged.",
         color="black", font_size=10,
