@@ -35,6 +35,10 @@ h1 { margin: 16px 0 20px; font-size: clamp(2.8rem, 6vw, 5rem); max-width: 850px;
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 22px; margin-top: 30px; }
 .button { display: inline-flex; gap: 24px; padding: 12px 19px; background: var(--ink); color: white; border-radius: 6px; font-weight: 700; text-decoration: none; }
 .button:hover { background: var(--teal); color: white; }
+.button-secondary { border: 1px solid #9dc8b6; background: white; color: var(--ink); }
+.button-secondary:hover { border-color: var(--teal); }
+.button:focus-visible, .home-card:focus-visible, .showcase-card:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
+.action-choices { gap: 12px; margin-top: 16px; }
 .text-link { font-weight: 700; }
 .layout { max-width: 1200px; margin: auto; padding: 60px 5% 90px; display: grid; grid-template-columns: 180px minmax(0, 780px); gap: 70px; }
 .contents { position: sticky; top: 24px; align-self: start; border-left: 1px solid var(--line); padding-left: 20px; }
@@ -67,7 +71,8 @@ figcaption { margin-top: 10px; font-size: .86rem; color: var(--muted); }
 .home-card h3, .showcase-card h3 { margin: 12px 0 8px; }
 .home-card p, .showcase-card p { margin: 0 0 18px; color: var(--muted); }
 .card-number { color: var(--teal); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.card-link { margin-top: auto; color: var(--teal); font-size: .9rem; font-weight: 700; }
+.card-button { display: inline-block; align-self: flex-start; margin-top: auto; padding: 9px 14px; border: 1px solid #9dc8b6; border-radius: 6px; color: var(--teal); font-size: .9rem; font-weight: 700; }
+.home-card:hover .card-button, .showcase-card:hover .card-button { border-color: var(--teal); }
 .showcase-list { display: grid; gap: 18px; }
 .showcase-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; gap: 26px; padding: 18px; color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 8px; background: white; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .showcase-card img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 5px; }
