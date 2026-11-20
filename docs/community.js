@@ -58,7 +58,7 @@ function validEntry(entry) {
 
 async function loadGallery() {
   try {
-    const response = await fetch("community/entries.json");
+    const response = await fetch("community/entries.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const entries = await response.json();
     if (!Array.isArray(entries) || !entries.every(validEntry)) throw new Error("Invalid gallery index");
