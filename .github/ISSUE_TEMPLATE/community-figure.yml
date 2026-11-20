@@ -22,17 +22,32 @@ body:
     id: description
     attributes:
       label: Description
-      description: Optional. Describe your figure or share a short message.
+      description: Optional. Describe what the figure shows.
+      placeholder: This panel compares marker expression across study groups.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback about ktfigure
+      description: Optional. Share your own experience; this text will appear on your gallery card.
+      placeholder: What did ktfigure help you create or learn?
   - type: input
     id: citation
     attributes:
       label: Paper citation
       description: Optional. Give a short citation.
+      placeholder: Author et al., Journal, year
+  - type: input
+    id: doi
+    attributes:
+      label: DOI
+      description: Optional. Enter a DOI or a doi.org link.
+      placeholder: 10.1000/example
   - type: input
     id: link
     attributes:
       label: Paper or project URL
       description: Optional. Use a public HTTP or HTTPS link.
+      placeholder: https://example.org/project
   - type: checkboxes
     id: permission
     attributes:

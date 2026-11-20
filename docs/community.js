@@ -20,12 +20,19 @@ function makeCard(entry) {
   content.className = "community-card-content";
   content.append(textElement("h3", entry.name));
   if (entry.description) content.append(textElement("p", entry.description));
+  if (entry.feedback) content.append(textElement("blockquote", entry.feedback, "community-feedback"));
   if (entry.citation) content.append(textElement("p", entry.citation, "caption"));
+  if (entry.doi) {
+    const doi = textElement("a", `DOI: ${entry.doi}`, "community-link");
+    doi.href = `https://doi.org/${encodeURIComponent(entry.doi).replace(/%2F/gi, "/")}`;
+    doi.rel = "noopener noreferrer";
+    content.append(doi);
+  }
   if (entry.link) {
     try {
       const url = new URL(entry.link);
       if (url.protocol === "https:" || url.protocol === "http:") {
-        const link = textElement("a", "Paper or project ↗");
+        const link = textElement("a", "Paper or project ↗", "community-link");
         link.href = url.href;
         link.rel = "noopener noreferrer";
         content.append(link);
@@ -53,7 +60,9 @@ async function loadGallery() {
         typeof entry.image !== "string" ||
         !new RegExp(`^${entry.issue}\\.(jpg|png)$`).test(entry.image) ||
         typeof entry.name !== "string" || typeof entry.description !== "string" ||
-        typeof entry.citation !== "string" || typeof entry.link !== "string"
+        typeof entry.citation !== "string" || typeof entry.link !== "string" ||
+        (entry.feedback !== undefined && typeof entry.feedback !== "string") ||
+        (entry.doi !== undefined && typeof entry.doi !== "string")
       ) throw new Error("Invalid gallery entry");
     }
     gallery.replaceChildren(...entries.map(makeCard));

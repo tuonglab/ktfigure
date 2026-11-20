@@ -93,7 +93,7 @@ def compress_image(data):
 
 
 def fields(body):
-    matches = list(re.finditer(r"(?m)^### (Image|Display name|Description|Paper citation|Paper or project URL|Permission)\s*$", body))
+    matches = list(re.finditer(r"(?m)^### (Image|Display name|Description|Feedback about ktfigure|Paper citation|DOI|Paper or project URL|Permission)\s*$", body))
     result = {}
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
@@ -109,6 +109,31 @@ def plain_field(value, maximum, name):
     value = value.strip()
     if len(value) > maximum:
         raise GalleryError(f"{name} must be at most {maximum} characters.")
+    return value
+
+
+def normalize_doi(value):
+    value = plain_field(value, 500, "DOI")
+    if not value:
+        return ""
+    if value.lower().startswith("doi:"):
+        value = value[4:].strip()
+    elif "://" in value:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            port = parsed.port
+        except ValueError as exc:
+            raise GalleryError("Enter a DOI or a doi.org link.") from exc
+        if (
+            parsed.scheme not in ("http", "https")
+            or parsed.hostname not in ("doi.org", "dx.doi.org")
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or port not in (None, 80, 443)
+        ):
+            raise GalleryError("Enter a DOI or a doi.org link.")
+        value = urllib.parse.unquote(parsed.path.lstrip("/"))
+    if len(value) > 500 or not re.fullmatch(r"10\.[0-9]{4,9}/\S+", value, flags=re.IGNORECASE):
+        raise GalleryError("Enter a DOI such as 10.1000/example or a doi.org link.")
     return value
 
 
@@ -155,7 +180,9 @@ def submit(event):
         "created_at": issue["created_at"],
         "name": plain_field(values.get("Display name", ""), 100, "Display name") or "Anonymous",
         "description": plain_field(values.get("Description", ""), 1500, "Description"),
+        "feedback": plain_field(values.get("Feedback about ktfigure", ""), 1500, "Feedback"),
         "citation": plain_field(values.get("Paper citation", ""), 500, "Citation"),
+        "doi": normalize_doi(values.get("DOI", "")),
         "link": link,
     }
     extension, data = compress_image(download_image(urls[0]))

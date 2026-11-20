@@ -35,9 +35,17 @@ _No response_
 
 An example panel.
 
+### Feedback about ktfigure
+
+The layout tools helped me arrange the panels.
+
 ### Paper citation
 
-_No response_
+Example et al., Journal, 2026
+
+### DOI
+
+https://doi.org/10.1000/example%2F123
 
 ### Paper or project URL
 
@@ -60,12 +68,38 @@ def test_submission_compresses_and_builds_index(tmp_path, monkeypatch):
     entries = json.loads(gallery.INDEX.read_text())
     assert entries[0]["name"] == "Anonymous"
     assert entries[0]["description"] == "An example panel."
+    assert entries[0]["feedback"] == "The layout tools helped me arrange the panels."
+    assert entries[0]["citation"] == "Example et al., Journal, 2026"
+    assert entries[0]["doi"] == "10.1000/example/123"
+    assert entries[0]["link"] == "https://example.org/paper"
     assert entries[0]["image"] == "42.jpg"
     stored = items / entries[0]["image"]
     assert stored.stat().st_size < 1_000_000
     with Image.open(stored) as image:
         assert image.size == (1600, 667)
         assert image.format == "JPEG"
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("", ""),
+    ("10.1000/example", "10.1000/example"),
+    ("doi: 10.1000/example", "10.1000/example"),
+    ("https://dx.doi.org/10.1000/example%23figure", "10.1000/example#figure"),
+])
+def test_normalize_doi(value, expected):
+    assert gallery.normalize_doi(value) == expected
+
+
+@pytest.mark.parametrize("value", [
+    "https://example.org/10.1000/example",
+    "https://doi.org.evil.example/10.1000/example",
+    "https://doi.org:invalid/10.1000/example",
+    "10.1000/contains spaces",
+    "javascript:alert(1)",
+])
+def test_reject_invalid_doi(value):
+    with pytest.raises(gallery.GalleryError, match="DOI"):
+        gallery.normalize_doi(value)
 
 
 def test_png_transparency_and_unsupported_image():

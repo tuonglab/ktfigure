@@ -112,6 +112,8 @@ tbody th { min-width: 130px; }
 .community-card-content { padding: 20px; overflow-wrap: anywhere; }
 .community-card-content h3 { margin: 8px 0; }
 .community-card-content p { white-space: pre-wrap; }
+.community-feedback { margin: 16px 0; padding-left: 12px; border-left: 3px solid #9dc8b6; color: var(--muted); white-space: pre-wrap; }
+.community-link { display: block; margin-top: 8px; }
 .community-discussion { display: block; margin-top: 16px; font-weight: 700; }
 .community-share, .community-examples { margin-top: 80px; scroll-margin-top: 25px; }
 .example-layout { height: 190px; padding: 10px; border: 1px solid var(--line); background: white; }

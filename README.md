@@ -133,7 +133,9 @@ python .github/scripts/generate_showcase_figures.py
 The [community gallery](https://tuonglab.github.io/ktfigure/community.html)
 uses GitHub issues for submissions and comment threads. The issue form and its
 attachments are public, including the submitter's GitHub username, even when
-the gallery display name is anonymous. Only share material you can publish.
+the gallery display name is anonymous. The form collects an optional figure
+description, personal feedback, citation, DOI and project link. Only share
+material you can publish.
 
 The `Prepare community figure` workflow validates GitHub-hosted JPEG/PNG
 attachments, strips image metadata, resizes and compresses a copy, and opens a
