@@ -7,6 +7,7 @@ import pandas as pd
 from PIL import Image, ImageTk
 
 from ktfigure import KTFigure, PlotBlock, PlotRenderer, main
+from ktfigure.gpu_preview import run_file, show_preview
 
 
 def smoke_test():
@@ -34,7 +35,16 @@ def smoke_test():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--smoke-test"]:
+    if len(sys.argv) == 3 and sys.argv[1] == "--gpu-preview":
+        run_file(sys.argv[2])
+    elif sys.argv[1:] == ["--gpu-smoke-test"]:
+        import numpy as np
+        from vispy import app
+
+        app.use_app("glfw")
+        timer = app.Timer(interval=1, connect=lambda event: app.quit(), start=True)
+        show_preview(np.array([[0.0, 0.0], [1.0, 1.0]]), "x", "y", 0)
+    elif sys.argv[1:] == ["--smoke-test"]:
         smoke_test()
     else:
         main()

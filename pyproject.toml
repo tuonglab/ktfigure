@@ -39,6 +39,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "vispy>=0.15,<0.17",
+    "glfw>=2.7,<3",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

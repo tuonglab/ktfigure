@@ -14,6 +14,7 @@ import copy
 import os
 import sys
 import pytest
+import numpy as np
 import pandas as pd
 import tkinter as tk
 from unittest.mock import MagicMock, patch
@@ -25,6 +26,7 @@ from ktfigure import (
     AestheticsPanel,
     default_aesthetics,
 )
+from ktfigure import PlotConfigDialog
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +60,28 @@ def make_sample_block(df=None):
         b.col_x = "x"
         b.col_y = "y"
     return b
+
+
+def test_gpu_preview_launches_selected_numeric_columns():
+    root = tk.Tk()
+    root.withdraw()
+    block = make_sample_block(pd.DataFrame({"x": [1, 2], "y": [3, 4]}))
+    dialog = PlotConfigDialog(root, block)
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.subprocess.Popen") as launch, \
+             patch.object(root, "after") as after:
+            dialog._gpu_preview()
+            path = launch.call_args.args[0][-1]
+            assert os.path.exists(path)
+            with np.load(path, allow_pickle=False) as data:
+                assert data["points"].tolist() == [[1, 3], [2, 4]]
+            launch.return_value.poll.return_value = 0
+            after.call_args.args[1]()
+            assert not os.path.exists(path)
+    finally:
+        dialog.destroy()
+        root.destroy()
 
 
 # ---------------------------------------------------------------------------
