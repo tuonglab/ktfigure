@@ -16,12 +16,15 @@ import datetime
 import io
 import math
 import os
+import subprocess
 import sys
+import tempfile
 
 import matplotlib
 import matplotlib.colors as mcolors
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import tkinter as tk
@@ -787,7 +790,12 @@ class PlotConfigDialog(tk.Toplevel):
         ttk.Button(hdr, text="↺  Refresh", command=self._update_preview).pack(
             side="right"
         )
+        ttk.Button(hdr, text="GPU scatter preview", command=self._gpu_preview).pack(
+            side="right", padx=4
+        )
 
+        self._preview_note = ttk.Label(right, text="", foreground="#556", wraplength=350)
+        self._preview_note.pack(fill="x")
         self._preview_lbl = tk.Label(
             right,
             text="Select columns then click Refresh to preview",
@@ -798,6 +806,53 @@ class PlotConfigDialog(tk.Toplevel):
             wraplength=350,
         )
         self._preview_lbl.pack(fill="both", expand=True)
+
+    def _gpu_preview(self):
+        if self._plot_type.get() != "scatter" or self._df is None:
+            messagebox.showwarning(
+                "GPU preview", "Load data and choose a scatter plot first.", parent=self
+            )
+            return
+        x, y = self._col_x.get(), self._col_y.get()
+        if x not in self._df or y not in self._df:
+            messagebox.showwarning(
+                "GPU preview", "Choose X and Y columns first.", parent=self
+            )
+            return
+        if not messagebox.askokcancel(
+            "GPU scatter preview",
+            "Open a separate interactive preview of the numeric X and Y values? "
+            "It uses normalized axes and a single colour, not the plot's hue, "
+            "size or other styling. It does not change the artboard or export.",
+            parent=self,
+        ):
+            return
+        try:
+            from ktfigure.gpu_preview import prepare_points
+
+            points, dropped = prepare_points(self._df[x], self._df[y])
+            fd, path = tempfile.mkstemp(suffix=".npz")
+            try:
+                with os.fdopen(fd, "wb") as file:
+                    np.savez(file, points=points, x=x, y=y, dropped=dropped)
+                if getattr(sys, "frozen", False):
+                    command = [sys.executable, "--gpu-preview", path]
+                else:
+                    command = [sys.executable, "-m", "ktfigure.gpu_preview", path]
+                process = subprocess.Popen(command)
+            except Exception:
+                os.unlink(path)
+                raise
+
+            def cleanup():
+                if process.poll() is None:
+                    self.master.after(1000, cleanup)
+                elif os.path.exists(path):
+                    os.unlink(path)
+
+            self.master.after(1000, cleanup)
+        except (ValueError, TypeError, OSError) as exc:
+            messagebox.showerror("GPU preview", str(exc), parent=self)
 
     # -------------------------------------------------------------------------
     def _populate_preview(self, df):
@@ -860,7 +915,14 @@ class PlotConfigDialog(tk.Toplevel):
             return
 
         temp = PlotBlock(0, 0, self._PREVIEW_W, self._PREVIEW_H)
-        temp.df = self._df
+        if self._plot_type.get() == "scatter" and len(self._df) > 20000:
+            temp.df = self._df.sample(n=20000, random_state=0)
+            self._preview_note.configure(
+                text="Thumbnail: 20,000 randomly sampled rows. Apply uses all data."
+            )
+        else:
+            temp.df = self._df
+            self._preview_note.configure(text="")
         temp.plot_type = self._plot_type.get()
         temp.col_x = self._col_x.get() or None
         col_y = self._col_y.get()

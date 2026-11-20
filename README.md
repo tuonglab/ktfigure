@@ -109,6 +109,19 @@ python -m ktfigure
 
 > **Data format:** ktfigure only accepts tabular data stored in **CSV** or **TSV** files. Each column should represent a variable and each row an observation. Other formats (Excel, JSON, databases, etc.) are not supported.
 
+For large scatterplots, **GPU scatter preview** opens a separate interactive
+OpenGL window for numeric X and Y. Drag to pan and use the mouse wheel to zoom.
+Its axes are normalized to 0–1 (the original ranges appear above the plot), and
+its points use one colour rather than the configured hue, size or other styling.
+Non-finite pairs are omitted and counted above the plot. This preview does not
+change the artboard or exports: those still use all data and Matplotlib on the
+CPU. The small configuration thumbnail samples 20,000 rows for large
+scatterplots. OpenGL may use a software renderer when a GPU is unavailable.
+
+The desktop builds include the preview dependencies. For a source installation,
+install them separately with `pip install ".[gpu]"` from the cloned repository.
+If OpenGL is unavailable, the normal CPU plotting workflow remains available.
+
 ### 3. Annotate (optional)
 
 Use the **Line**, **Rectangle**, **Circle**, and **Text** toolbar modes to add annotations to your figure.

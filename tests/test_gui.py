@@ -13,7 +13,9 @@ human interaction is needed — we drive the app programmatically.
 import copy
 import os
 import sys
+import tempfile
 import pytest
+import numpy as np
 import pandas as pd
 import tkinter as tk
 from unittest.mock import MagicMock, patch
@@ -25,6 +27,7 @@ from ktfigure import (
     AestheticsPanel,
     default_aesthetics,
 )
+from ktfigure import PlotConfigDialog
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +61,253 @@ def make_sample_block(df=None):
         b.col_x = "x"
         b.col_y = "y"
     return b
+
+
+def test_gpu_preview_launches_selected_numeric_columns():
+    root = tk.Tk()
+    root.withdraw()
+    block = make_sample_block(pd.DataFrame({"x": [1, 2], "y": [3, 4]}))
+    dialog = PlotConfigDialog(root, block)
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.subprocess.Popen") as launch, \
+             patch.object(root, "after") as after:
+            dialog._gpu_preview()
+            path = launch.call_args.args[0][-1]
+            assert os.path.exists(path)
+            with np.load(path, allow_pickle=False) as data:
+                assert data["points"].tolist() == [[1, 3], [2, 4]]
+            launch.return_value.poll.return_value = 0
+            after.call_args.args[1]()
+            assert not os.path.exists(path)
+            after.call_args.args[1]()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_validates_selection_and_cancellation():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.showwarning") as warn, \
+             patch("ktfigure.messagebox.askokcancel", return_value=False), \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._plot_type.set("line")
+            dialog._gpu_preview()
+            dialog._plot_type.set("scatter")
+            dialog._col_x.set("missing")
+            dialog._gpu_preview()
+            dialog._col_x.set("x")
+            dialog._gpu_preview()
+            assert warn.call_count == 2
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_requires_data():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    try:
+        with patch("ktfigure.messagebox.showwarning") as warn, \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            warn.assert_called_once()
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_reports_spawn_failure_and_removes_data(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    make_temp = tempfile.mkstemp
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.tempfile.mkstemp",
+                   side_effect=lambda suffix: make_temp(suffix=suffix, dir=tmp_path)), \
+             patch("ktfigure.subprocess.Popen", side_effect=OSError("cannot launch")):
+            dialog._gpu_preview()
+            assert "cannot launch" in error.call_args.args[1]
+            assert not list(tmp_path.iterdir())
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_cleans_up_if_writing_data_fails(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    make_temp = tempfile.mkstemp
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.tempfile.mkstemp",
+                   side_effect=lambda suffix: make_temp(suffix=suffix, dir=tmp_path)), \
+             patch("ktfigure.np.savez", side_effect=OSError("cannot write")), \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            assert "cannot write" in error.call_args.args[1]
+            assert not list(tmp_path.iterdir())
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_rejects_non_numeric_data():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": ["bad"], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            error.assert_called_once()
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_frozen_gpu_preview_uses_bundled_executable():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch.object(sys, "frozen", True, create=True), \
+             patch("ktfigure.subprocess.Popen") as launch, \
+             patch.object(root, "after") as after:
+            dialog._gpu_preview()
+            command = launch.call_args.args[0]
+            assert command[:2] == [sys.executable, "--gpu-preview"]
+            launch.return_value.poll.return_value = None
+            after.call_args.args[1]()
+            assert after.call_count == 2
+            launch.return_value.poll.return_value = 0
+            after.call_args.args[1]()
+            assert not os.path.exists(command[-1])
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_large_scatter_thumbnail_samples_without_changing_data():
+    root = tk.Tk()
+    root.withdraw()
+    block = make_sample_block(pd.DataFrame({"x": range(20001), "y": range(20001)}))
+    dialog = PlotConfigDialog(root, block)
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+        assert len(render.call_args.args[0].df) == 20000
+        assert len(dialog._df) == 20001
+        assert "sampled" in dialog._preview_note.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_thumbnail_sampling_is_cleared_for_other_plot_types():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(
+        pd.DataFrame({"x": range(20001), "y": range(20001)})
+    ))
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+            assert "sampled" in dialog._preview_note.cget("text")
+            dialog._plot_type.set("histogram")
+            dialog._on_type_change()
+            assert len(render.call_args.args[0].df) == 20001
+            assert dialog._preview_note.cget("text") == ""
+            assert str(dialog._cb_y.cget("state")) == "disabled"
+            dialog._plot_type.set("scatter")
+            dialog._on_type_change()
+        assert len(render.call_args.args[0].df) == 20000
+        assert str(dialog._cb_y.cget("state")) == "readonly"
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_large_csv_load_shows_sampled_thumbnail(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    path = tmp_path / "large.csv"
+    pd.DataFrame({"x": range(20001), "y": range(20001)}).to_csv(path, index=False)
+    try:
+        with patch("ktfigure.filedialog.askopenfilename", return_value=str(path)), \
+             patch.object(dialog, "after") as after, \
+             patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._load_file()
+            after.call_args.args[1]()
+        assert len(dialog._df) == 20001
+        assert len(render.call_args.args[0].df) == 20000
+        assert "sampled" in dialog._preview_note.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_empty_csv_reports_load_error(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    path = tmp_path / "empty.csv"
+    path.write_text("x,y\n", encoding="utf-8")
+    try:
+        with patch("ktfigure.filedialog.askopenfilename", return_value=str(path)), \
+             patch("ktfigure.messagebox.showerror") as error:
+            dialog._load_file()
+        assert "no data rows" in error.call_args.args[1]
+        assert dialog._df is None
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_scatter_thumbnail_reports_render_failure():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax", side_effect=ValueError("bad plot")):
+            dialog._update_preview()
+        assert "bad plot" in dialog._preview_lbl.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_scatter_thumbnail_preserves_hue_and_size_mappings():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(
+        pd.DataFrame({"x": [1], "y": [2], "group": ["A"], "size": [3]})
+    ))
+    try:
+        dialog._col_hue.set("group")
+        dialog._col_size.set("size")
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+        block = render.call_args.args[0]
+        assert (block.col_hue, block.col_size) == ("group", "size")
+    finally:
+        dialog.destroy()
+        root.destroy()
 
 
 # ---------------------------------------------------------------------------
