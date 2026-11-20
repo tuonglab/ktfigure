@@ -83,6 +83,11 @@ jobs:
           else
             python -c 'import subprocess, sys; subprocess.run([sys.argv[1], "--smoke-test"], check=True, timeout=120)' "$executable"
           fi
+      - name: Diagnose Linux crash
+        if: failure() && runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb
+          xvfb-run -a gdb --batch -ex run -ex "thread apply all bt" --args extracted/ktfigure/ktfigure --smoke-test
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
