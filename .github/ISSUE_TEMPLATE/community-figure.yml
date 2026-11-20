@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Share only an image you have permission to publish. The issue, your GitHub username and all comments are public, even if you leave the display name blank. Submissions are reviewed before appearing in the gallery.
+        Share only an image you have permission to publish. The issue, your GitHub username and all comments are public, even if you leave the display name blank. Do not submit pornographic, hateful, harassing or graphically violent content. Images and text are screened with Copilot before automatic publication; flagged or unavailable reviews go to a maintainer.
   - type: textarea
     id: image
     attributes:

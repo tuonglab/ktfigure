@@ -66,7 +66,7 @@ async function loadGallery() {
       ) throw new Error("Invalid gallery entry");
     }
     gallery.replaceChildren(...entries.map(makeCard));
-    status.textContent = entries.length ? `${entries.length} approved figure${entries.length === 1 ? "" : "s"}.` : "No community submissions have been approved yet. Be the first to share!";
+    status.textContent = entries.length ? `${entries.length} community figure${entries.length === 1 ? "" : "s"}.` : "No community submissions yet. Be the first to share!";
   } catch (error) {
     status.textContent = "The gallery could not be loaded. Please try again later or visit the submission form.";
     console.error("Could not load community gallery:", error);

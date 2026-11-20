@@ -2,6 +2,8 @@ import importlib.util
 import io
 import json
 import random
+import os
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 from urllib.request import Request
@@ -152,3 +154,38 @@ def test_prune_removes_oldest_and_preserves_newest(tmp_path, monkeypatch):
     assert not (tmp_path / "1.jpg").exists()
     assert (tmp_path / "2.jpg").exists()
     assert (tmp_path / "3.jpg").exists()
+
+
+@pytest.mark.parametrize("kind, expected_workflows", [
+    ("submission", ["community-retention.yml", "pages.yml"]),
+    ("retention", ["pages.yml"]),
+])
+def test_merge_dispatches_followup_workflows(tmp_path, kind, expected_workflows):
+    log = tmp_path / "gh.log"
+    gh = tmp_path / "gh"
+    gh.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$FAKE_GH_LOG"\n')
+    gh.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "FAKE_GH_LOG": str(log),
+           "GITHUB_REPOSITORY": "tuonglab/ktfigure", "BASE_BRANCH": "master"}
+    script = SCRIPT.parent / "merge_community_pr.sh"
+    subprocess.run(["bash", str(script), "community/figure-42", "abc123", kind], env=env, check=True)
+    commands = log.read_text().splitlines()
+    assert "--match-head-commit abc123" in commands[0]
+    assert [command.split()[2] for command in commands[1:]] == expected_workflows
+
+
+def test_failed_merge_never_dispatches_workflows(tmp_path):
+    log = tmp_path / "gh.log"
+    gh = tmp_path / "gh"
+    gh.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$FAKE_GH_LOG"\nexit 1\n')
+    gh.chmod(0o755)
+    sleep = tmp_path / "sleep"
+    sleep.write_text("#!/bin/sh\nexit 0\n")
+    sleep.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "FAKE_GH_LOG": str(log),
+           "GITHUB_REPOSITORY": "tuonglab/ktfigure", "BASE_BRANCH": "master"}
+    script = SCRIPT.parent / "merge_community_pr.sh"
+    result = subprocess.run(["bash", str(script), "community/figure-42", "abc123", "submission"], env=env)
+    assert result.returncode != 0
+    assert len(log.read_text().splitlines()) == 6
+    assert "workflow run" not in log.read_text()

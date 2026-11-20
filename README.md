@@ -139,17 +139,29 @@ material you can publish.
 
 The `Prepare community figure` workflow validates GitHub-hosted JPEG/PNG
 attachments, strips image metadata, resizes and compresses a copy, and opens a
-pull request for review. Repository administrators must enable **Settings →
-Actions → General → Workflow permissions → Allow GitHub Actions to create and
-approve pull requests**. A workflow-created pull request using `GITHUB_TOKEN`
-does not automatically start the usual pull-request workflows; maintainers
-should review and validate it before merging. If preparation fails, check the
-Actions run and rerun it after the problem is addressed.
+pull request. A separate, read-only Copilot job screens the image and submission
+text for inappropriate content. Only a clear pass triggers automatic merging;
+flagged, uncertain, unavailable or exhausted-credit reviews remain open for
+human review. Screening can miss inappropriate content and must not be treated
+as a guarantee. A merge never bypasses branch rules. Workflow-created pull
+requests using `GITHUB_TOKEN` do not start the usual pull-request workflows.
 
-The gallery displays at most 200 approved figures. Submission pull requests
+An organization administrator must keep **AI credits paid usage** disabled to
+prevent Copilot overage charges; the workflow cannot enforce or verify billing
+policy. If no included credits or vision-capable model are available, the
+submission remains for human review. Organization policy must also allow
+Copilot CLI usage billed to the organization, and repository administrators
+must enable **Settings → Actions → General → Workflow permissions → Allow
+GitHub Actions to create and approve pull requests**. Standard GitHub-hosted
+runners are used. If a workflow fails, inspect the run before retrying: a pull
+request may already exist or have merged.
+
+The gallery displays at most 200 figures. Submission pull requests
 remove the oldest files when necessary; a separate retention workflow proposes
-cleanup if concurrent merges exceed the limit. Those deletions require review
-and do not remove files from Git history or attachments from their issues.
+and merges cleanup if concurrent merges exceed the limit. Deletions do not
+remove files from Git history or attachments from their issues. Merges made
+with `GITHUB_TOKEN` do not trigger push workflows, so the submission and
+retention workflows explicitly dispatch Pages deployment and retention checks.
 The Pages workflow builds `docs/community/entries.json` from the individual
 metadata files. For a local preview, install
 `.github/scripts/gallery-requirements.txt`, run

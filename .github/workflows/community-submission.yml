@@ -4,22 +4,24 @@ on:
   issues:
     types: [opened]
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   prepare:
     if: startsWith(github.event.issue.title, '[Gallery]')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: write
+    outputs:
+      branch: ${{ steps.open.outputs.branch }}
+      sha: ${{ steps.open.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .github/scripts/gallery-requirements.txt
       - run: python -m pip install -r .github/scripts/gallery-requirements.txt
       - name: Validate and compress submission
         env:
@@ -29,6 +31,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$RUNNER_TEMP/issue.json"
           python .github/scripts/community_gallery.py submit --issue "$RUNNER_TEMP/issue.json"
       - name: Open a review pull request
+        id: open
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -44,12 +47,61 @@ jobs:
           git push origin "HEAD:refs/heads/$branch"
           gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base "$BASE_BRANCH" \
             --title "Add community figure #$ISSUE_NUMBER" \
-            --body "Review the image and submission in #$ISSUE_NUMBER before merging. Older gallery entries may be removed to enforce the 200-image limit."
-      - name: Report a failed submission
-        if: failure()
+            --body "Prepared from #$ISSUE_NUMBER. Automated screening must pass before this pull request can be merged automatically; a maintainer should review any held submission."
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  screen:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      copilot-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --prefix .github/scripts/community-moderation --ignore-scripts --no-audit --no-fund
+      - name: Screen the image and submission text
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: node .github/scripts/community-moderation/screen.mjs "docs/community/items/$ISSUE_NUMBER.json"
+
+  publish:
+    needs: [prepare, screen]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Merge the screened pull request and schedule publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          HEAD_SHA: ${{ needs.prepare.outputs.sha }}
+        run: bash .github/scripts/merge_community_pr.sh "$BRANCH" "$HEAD_SHA" submission
+
+  report-hold:
+    needs: [prepare, screen, publish]
+    if: always() && needs.prepare.result != 'skipped' && (needs.prepare.result != 'success' || needs.screen.result != 'success' || needs.publish.result != 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Request maintainer review
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body "We couldn't prepare this submission automatically. Please check that it contains one GitHub-uploaded JPEG or PNG under 10 MiB and that the permission box is checked. A maintainer can inspect the Actions run for details."
+            --body "Automatic publication did not complete. A maintainer should review this submission and inspect the Actions run. The review may have flagged the content or been unavailable, or publication may have failed; a pull request may already exist or have merged."

@@ -31,8 +31,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .github/scripts/gallery-requirements.txt
       - run: python -m pip install -r .github/scripts/gallery-requirements.txt
       - run: python .github/scripts/community_gallery.py build
       - uses: actions/configure-pages@v5
