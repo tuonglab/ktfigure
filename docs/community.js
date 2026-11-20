@@ -73,47 +73,4 @@ async function loadGallery() {
   }
 }
 
-const examples = [
-  ["A time-course overview", "plot-line"],
-  ["Individual sample responses", "plot-strip"],
-  ["Biomarker association", "plot-scatter"],
-  ["Comparing two methods", "plot-box"],
-  ["Response distributions", "plot-histogram"],
-  ["Endpoint observations", "plot-strip"],
-  ["Treatment over time", "plot-line"],
-  ["Exploring paired measurements", "plot-scatter"],
-  ["Benchmark variability", "plot-box"],
-  ["Measurement distribution", "plot-histogram"],
-  ["Longitudinal trends", "plot-line"],
-  ["Group comparisons", "plot-strip"],
-  ["Two measurements together", "plot-scatter"],
-  ["Variability between groups", "plot-box"],
-  ["Score distribution", "plot-histogram"],
-  ["Changes across visits", "plot-line"],
-  ["Showing observations", "plot-strip"],
-  ["Comparing measurements", "plot-scatter"],
-  ["Method runtime spread", "plot-box"],
-  ["Exploring score ranges", "plot-histogram"],
-];
-
-const exampleGallery = document.getElementById("community-examples");
-for (const [title, symbol] of examples) {
-  const card = document.createElement("article");
-  card.className = "community-card";
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 240 120");
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", `Schematic example: ${title}`);
-  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  use.setAttribute("href", `images/step-illustrations.svg#${symbol}`);
-  svg.append(use);
-  card.append(svg);
-  const content = document.createElement("div");
-  content.className = "community-card-content";
-  content.append(textElement("span", "Example plot", "card-number"));
-  content.append(textElement("h3", title));
-  card.append(content);
-  exampleGallery.append(card);
-}
-
 loadGallery();
