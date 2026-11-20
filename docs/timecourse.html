@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A step-by-step six-panel treatment time-course figure tutorial.">
+  <title>Time-course figure | ktfigure</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="motion.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">ktfigure <span>tutorial</span></a>
+    <nav aria-label="Main navigation">
+      <a href="index.html">Home</a>
+      <details class="nav-dropdown">
+        <summary>Tutorials</summary>
+        <div class="nav-menu">
+          <a href="getting-started.html">Getting started</a>
+          <a href="showcases.html">Showcase overview</a>
+          <a href="timecourse.html" aria-current="page">Time-course figure</a>
+          <a href="methods.html">Methods pipeline</a>
+          <a href="checklist.html">Publication checklist</a>
+        </div>
+      </details>
+      <a href="https://github.com/tuonglab/ktfigure">GitHub ↗</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Showcase 01 / Experimental biology</p>
+        <h1>A treatment<br>time course.</h1>
+        <p class="lead">Build a figure that makes the study schedule clear, then show what happened at the group and individual levels.</p>
+        <div class="actions">
+          <a class="button" href="#design">Build panel A <span aria-hidden="true">→</span></a>
+          <a class="text-link" href="data/timecourse.csv" download>Download the synthetic data ↓</a>
+        </div>
+      </div>
+    </section>
+    <div class="layout">
+      <aside class="contents" aria-label="On this page">
+        <p>On this page</p>
+        <a href="#plan">The figure story</a>
+        <a href="#design">A · Study design</a>
+        <a href="#results">B–F · Results</a>
+        <a href="checklist.html">Publication checklist</a>
+      </aside>
+      <div class="article">
+        <section id="plan" data-reveal>
+          <p class="eyebrow">The question</p>
+          <h2>Start with the study schedule.</h2>
+          <p>This six-panel storyboard moves from the treatment groups and sampling times to a response trajectory, endpoint observations and exploratory relationships. Download <a href="data/timecourse.csv" download>timecourse.csv</a> and <a href="data/timecourse-endpoints.csv" download>timecourse-endpoints.csv</a>. Each group has four fictional subjects measured at 0, 24 and 48 hours; values and units are illustrative, not experimental evidence.</p>
+          <figure>
+            <img src="images/showcase-timecourse.svg" alt="Six-panel figure with a boxed two-group sampling timeline, response over time, endpoint observations, baseline versus endpoint, biomarker versus change, and a change histogram." loading="lazy">
+            <figcaption>Illustrative layout rendered with ktfigure plots and vector-drawn concepts. Synthetic data only.</figcaption>
+          </figure>
+          <div class="figure-map" aria-label="Six-panel time-course storyboard">
+            <div><b>A</b><strong>Study design</strong><span>Groups → sampling times</span></div>
+            <div><b>B</b><strong>Time course</strong><span>Response over time</span></div>
+            <div><b>C</b><strong>Endpoint</strong><span>Individual observations</span></div>
+            <div><b>D</b><strong>Baseline vs endpoint</strong><span>Within-subject context</span></div>
+            <div><b>E</b><strong>Biomarker vs change</strong><span>Explore association</span></div>
+            <div><b>F</b><strong>Change distribution</strong><span>Spread by group</span></div>
+          </div>
+        </section>
+        <section id="design" data-reveal>
+          <p class="eyebrow">Panel A / Concept figure</p>
+          <h2>Draw the design as two swimlanes.</h2>
+          <ol class="steps">
+            <li>Place a <strong>Rectangle</strong> at the left of each lane for the group and treatment condition (for example, Control / vehicle and Treatment / agent). Keep the wording faithful to the real protocol.</li>
+            <li>Add three same-sized sample boxes along each lane for 0, 24 and 48 h. Draw a <strong>Line</strong> with an arrowhead from the group box through the time points. Keep connector segments in the gaps between boxes, so they do not pass behind labels or through the shapes.</li>
+            <li>Use <strong>Text</strong> inside the boxes for group and sample labels; align the rows and keep spacing, border colour and line weight consistent. Label the measured outcome below the lanes only if it applies at every time point.</li>
+          </ol>
+          <div class="note"><strong>Export caveat:</strong> ktfigure does not currently export text annotations or line arrowheads faithfully. Add those in a vector editor after PDF/SVG export and inspect that connectors still meet the box edges without covering labels.</div>
+        </section>
+        <section id="results" data-reveal>
+          <p class="eyebrow">Panels B–F / Show the evidence</p>
+          <h2>Choose the plot for the question.</h2>
+          <p>In ktfigure, draw a plot region, load the named CSV in <strong>Data</strong>, select the plot type and map the listed columns. Set other mapping fields to <strong>(none)</strong>. Use the Properties panel to apply the same font and colour mapping across panels.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Panel / question</th><th>Plot and mappings</th><th>Why this view?</th></tr></thead>
+            <tbody>
+              <tr><th>B · How does response change?</th><td><code>timecourse.csv</code>: <strong>line</strong>; X <code>time_h</code>, Y <code>response</code>, Hue <code>group</code>. Labels: Time (h), Response (a.u.).</td><td>Shows the group trajectory. It aggregates observations at each time and does not draw each subject's paired trajectory.</td></tr>
+              <tr><th>C · How variable is the endpoint?</th><td><code>timecourse-endpoints.csv</code>: <strong>strip</strong>; X <code>group</code>, Y <code>endpoint</code>. Label Y: 48 h response (a.u.).</td><td>Shows all four observations per group rather than hiding them behind a mean.</td></tr>
+              <tr><th>D · Does baseline matter?</th><td>Endpoint file: <strong>scatter</strong>; X <code>baseline</code>, Y <code>endpoint</code>, Hue <code>group</code>. Label both axes in a.u.</td><td>Each point is one subject's paired baseline and endpoint; it is not a paired-line plot.</td></tr>
+              <tr><th>E · Is a biomarker associated with change?</th><td>Endpoint file: <strong>scatter</strong>; X <code>biomarker</code>, Y <code>change</code>, Hue <code>group</code>. Label the axes with units.</td><td>Shows observations behind a possible association, not proof of causation.</td></tr>
+              <tr><th>F · How does change vary?</th><td>Endpoint file: <strong>histogram</strong>; X <code>change</code>, Hue <code>group</code>. Label X: Change from baseline (a.u.).</td><td>With only four subjects per group, bins can mislead. Prefer C to show individual values; use larger samples for distribution claims.</td></tr>
+            </tbody>
+          </table></div>
+          <p><code>change</code> is the 48 h value minus baseline. Do not treat repeated time points as independent subjects. Describe sample size, biological versus technical replicates, uncertainty and statistical methods in the legend. Verify the line plot's uncertainty display before describing it; seaborn defaults can vary by version.</p>
+          <div class="end"><p>Ready to check the final figure?</p><a href="checklist.html">Open the publication checklist →</a></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer>Built with ktfigure · <a href="showcases.html">All showcases</a> · <a href="https://github.com/tuonglab/ktfigure">Source on GitHub</a></footer>
+</body>
+</html>

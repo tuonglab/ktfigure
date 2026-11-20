@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A step-by-step workflow and benchmark figure tutorial for methods papers.">
+  <title>Methods pipeline | ktfigure</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="motion.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">ktfigure <span>tutorial</span></a>
+    <nav aria-label="Main navigation">
+      <a href="index.html">Home</a>
+      <details class="nav-dropdown">
+        <summary>Tutorials</summary>
+        <div class="nav-menu">
+          <a href="getting-started.html">Getting started</a>
+          <a href="showcases.html">Showcase overview</a>
+          <a href="timecourse.html">Time-course figure</a>
+          <a href="methods.html" aria-current="page">Methods pipeline</a>
+          <a href="checklist.html">Publication checklist</a>
+        </div>
+      </details>
+      <a href="https://github.com/tuonglab/ktfigure">GitHub ↗</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Showcase 02 / Methods paper</p>
+        <h1>Compare analysis<br>methods fairly.</h1>
+        <p class="lead">Turn the analysis into a readable pipeline, then show benchmark evidence without hiding variation or overstating performance.</p>
+        <div class="actions">
+          <a class="button" href="#pipeline">Build panel A <span aria-hidden="true">→</span></a>
+          <a class="text-link" href="data/methods-benchmark.csv" download>Download synthetic benchmark data ↓</a>
+        </div>
+      </div>
+    </section>
+    <div class="layout">
+      <aside class="contents" aria-label="On this page">
+        <p>On this page</p>
+        <a href="#story">The figure story</a>
+        <a href="#pipeline">A · Workflow pipeline</a>
+        <a href="#results">B–F · Benchmark results</a>
+        <a href="checklist.html">Publication checklist</a>
+      </aside>
+      <div class="article">
+        <section id="story" data-reveal>
+          <p class="eyebrow">The question</p>
+          <h2>Show what was compared.</h2>
+          <p>This six-panel storyboard introduces the inputs, quality checks, parallel methods and evaluation before showing accuracy, runtime, agreement and score distributions. Download <a href="data/methods-benchmark.csv" download>methods-benchmark.csv</a>. It contains fictional results for two methods on eight matched datasets; each row is one method–dataset run. These values are illustrative, not validation of a real method.</p>
+          <figure>
+            <img src="images/showcase-methods.svg" alt="Six-panel example with a pipeline from matched datasets through quality control and preprocessing, two parallel methods, scoring and comparison, followed by accuracy, runtime, agreement and score-distribution plots." loading="lazy">
+            <figcaption>Illustrative finished figure using ktfigure's plot renderer and vector-drawn concepts. Synthetic benchmark data only.</figcaption>
+          </figure>
+          <div class="figure-map" aria-label="Six-panel methods-comparison storyboard">
+            <div><b>A</b><strong>Analysis workflow</strong><span>Matched data → QC → methods → comparison</span></div>
+            <div><b>B</b><strong>Accuracy</strong><span>Individual benchmark runs</span></div>
+            <div><b>C</b><strong>Trade-off</strong><span>Runtime vs accuracy</span></div>
+            <div><b>D</b><strong>Runtime</strong><span>Variability by method</span></div>
+            <div><b>E</b><strong>Agreement</strong><span>Accuracy vs agreement</span></div>
+            <div><b>F</b><strong>Score distribution</strong><span>Overlapping ranges</span></div>
+          </div>
+          <p class="caption">Panel A spans the first row to keep the pipeline legible; B–D compare individual results in the second row, with E–F below.</p>
+        </section>
+        <section id="pipeline" data-reveal>
+          <p class="eyebrow">Panel A / Concept figure</p>
+          <h2>Draw a branching analysis pipeline.</h2>
+          <ol class="steps">
+            <li>Make a left-to-right pipeline from <strong>Rectangle</strong> boxes: “Matched datasets” → “QC + processing” → branch into parallel “Method A” and “Method B” boxes → “Score runs”. Add a final comparison box for matched datasets and the metrics you actually evaluate.</li>
+            <li>Use <strong>Line</strong> segments to connect boxes. Draw the shared input path first, branch into the method lanes, then bring the scored results together. Route connectors through the gaps between boxes; do not run lines beneath text or through box interiors.</li>
+            <li>Place short <strong>Text</strong> labels centered inside each box. Keep box sizes, padding and border widths consistent. Label arrows only if the words fit clearly in open space and describe the actual workflow.</li>
+          </ol>
+          <div class="note"><strong>Match the actual method:</strong> show split, preprocessing, exclusion or validation steps only when they were performed, and put them in the correct order. ktfigure does not currently export text annotations or line arrowheads faithfully; add and inspect these in a vector editor after PDF/SVG export.</div>
+        </section>
+        <section id="results" data-reveal>
+          <p class="eyebrow">Panels B–F / Benchmark evidence</p>
+          <h2>Show the trade-offs, not just a winner.</h2>
+          <p>Load <code>methods-benchmark.csv</code> for each plot and leave unspecified mappings at <strong>(none)</strong>. In Properties, use the same group colours and typography across panels.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Panel / question</th><th>Plot and mappings</th><th>Why this view?</th></tr></thead>
+            <tbody>
+              <tr><th>B · How accurate?</th><td><strong>strip</strong>; X <code>method</code>, Y <code>accuracy</code>. Label Y: Accuracy (fraction).</td><td>Shows individual runs rather than only an average.</td></tr>
+              <tr><th>C · What is the trade-off?</th><td><strong>scatter</strong>; X <code>runtime_min</code>, Y <code>accuracy</code>, Hue <code>method</code>. Label axes with units.</td><td>Shows speed and accuracy together, including overlap between methods.</td></tr>
+              <tr><th>D · How variable is runtime?</th><td><strong>box</strong>; X <code>method</code>, Y <code>runtime_min</code>. Label Y: Runtime (min).</td><td>Summarizes spread; with eight runs per method, also consider showing every point.</td></tr>
+              <tr><th>E · Do metrics agree?</th><td><strong>scatter</strong>; X <code>agreement</code>, Y <code>accuracy</code>, Hue <code>method</code>. Label axes as fractions.</td><td>Checks whether distinct metrics tell a consistent story; association does not establish equivalence.</td></tr>
+              <tr><th>F · How are scores distributed?</th><td><strong>histogram</strong>; X <code>accuracy</code>, Hue <code>method</code>. Label X: Accuracy (fraction).</td><td>Shows score ranges; bin choice matters, especially with few runs.</td></tr>
+            </tbody>
+          </table></div>
+          <p>The plots do not connect matched pairs. For paired comparisons, calculate per-dataset differences with an appropriate analysis outside ktfigure and state how pairing was handled. Define metrics, data splits, hardware and runtime measurement in the legend; do not claim general performance from this toy benchmark.</p>
+          <div class="end"><p>Ready to check the final figure?</p><a href="checklist.html">Open the publication checklist →</a></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer>Built with ktfigure · <a href="showcases.html">All showcases</a> · <a href="https://github.com/tuonglab/ktfigure">Source on GitHub</a></footer>
+</body>
+</html>

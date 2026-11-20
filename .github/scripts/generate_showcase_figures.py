@@ -45,38 +45,109 @@ def design(ax, kind):
     ax.set_ylim(0, 1)
     ax.axis("off")
     if kind == "timecourse":
-        ax.text(.05, .85, "Control", fontsize=8)
-        ax.text(.05, .62, "Treatment", fontsize=8)
-        ax.annotate("", xy=(.93, .3), xytext=(.15, .3),
-                    arrowprops={"arrowstyle": "->", "lw": 1})
-        for x, label in ((.22, "0"), (.52, "24"), (.82, "48 h")):
-            ax.plot([x, x], [.27, .33], color="black", lw=1)
-            ax.text(x, .18, label, fontsize=8, ha="center")
-            ax.plot([x, x], [.62, .85], "o", color="#0173b2", markersize=3)
-        ax.text(.05, .03, "Response measured at each time", fontsize=7)
+        ax.text(.5, .96, "Cohort and sampling", fontsize=6.5, ha="center", va="top")
+        lane_colors = ("#0173b2", "#de8f05")
+        lane_centers = (.70, .31)
+        sample_x = (.34, .55, .76)
+        sample_w, sample_h = .17, .20
+        group_x, group_w, group_h = .02, .22, .20
+
+        for color, center, group in zip(
+            lane_colors, lane_centers, ("Control\nvehicle", "Treatment\nagent")
+        ):
+            group_y = center - group_h / 2
+            nodes = [(group_x, group_y, group_w, group_h, group, color)]
+            for x, time in zip(sample_x, ("0 h\nsample", "24 h\nsample", "48 h\nsample")):
+                nodes.append((x, center - sample_h / 2, sample_w, sample_h, time, color))
+
+            for left, right in zip(nodes, nodes[1:]):
+                start = (left[0] + left[2], center)
+                end = (right[0], center)
+                ax.annotate(
+                    "", xy=end, xytext=start,
+                    arrowprops={"arrowstyle": "->", "lw": 1, "color": "#25383d"},
+                    zorder=1,
+                )
+
+            for x, y, width, height, label, edge in nodes:
+                ax.add_patch(Rectangle(
+                    (x, y), width, height, facecolor="white", edgecolor=edge,
+                    linewidth=1.1, zorder=2,
+                ))
+                ax.text(
+                    x + width / 2, y + height / 2, label, ha="center", va="center",
+                    fontsize=6.2, color="#172d35", linespacing=1.15, zorder=3,
+                )
     else:
+        ax.text(.5, .96, "Analysis pipeline", fontsize=6.5, ha="center", va="top")
         boxes = [
-            (.03, .41, .25, .20, "Input\n datasets"),
-            (.38, .68, .25, .20, "Method A"),
-            (.38, .14, .25, .20, "Method B"),
-            (.73, .41, .25, .20, "Evaluation"),
+            (.02, .39, .14, .22, "Matched\ndatasets"),
+            (.21, .39, .17, .22, "QC +\nprocessing"),
+            (.42, .67, .15, .20, "Method A"),
+            (.42, .13, .15, .20, "Method B"),
+            (.63, .67, .15, .20, "Score\nruns"),
+            (.63, .13, .15, .20, "Score\nruns"),
+            (.84, .34, .15, .32, "Compare\nmatched runs\nAccuracy · runtime\n· agreement"),
         ]
-        for x, y, w, h, label in boxes:
-            ax.add_patch(Rectangle((x, y), w, h, fill=False, lw=1))
-            ax.text(x + w / 2, y + h / 2, label, ha="center", va="center", fontsize=7)
-        for start, end in (((.28, .51), (.38, .78)), ((.28, .51), (.38, .24)),
-                           ((.63, .78), (.73, .51)), ((.63, .24), (.73, .51))):
-            ax.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "->", "lw": 1})
+        color = "#25383d"
+
+        def arrow(start, end):
+            ax.annotate(
+                "", xy=end, xytext=start,
+                arrowprops={"arrowstyle": "->", "lw": 1, "color": color},
+                zorder=1,
+            )
+
+        # A shared input branches into parallel methods, then rejoins for comparison.
+        ax.annotate(
+            "", xy=(.28, .795), xytext=(.22, .795),
+            arrowprops={"arrowstyle": "->", "lw": 1, "color": color}, zorder=1,
+        )
+        ax.plot([.38, .40], [.50, .50], color=color, lw=1, zorder=1)
+        ax.plot([.40, .40], [.23, .77], color=color, lw=1, zorder=1)
+        arrow((.40, .77), (.42, .77))
+        arrow((.40, .23), (.42, .23))
+        arrow((.57, .77), (.63, .77))
+        arrow((.57, .23), (.63, .23))
+        ax.plot([.78, .80], [.77, .77], color=color, lw=1, zorder=1)
+        ax.plot([.78, .80], [.23, .23], color=color, lw=1, zorder=1)
+        ax.plot([.80, .80], [.23, .77], color=color, lw=1, zorder=1)
+        arrow((.80, .50), (.84, .50))
+
+        for x, y, width, height, label in boxes:
+            ax.add_patch(Rectangle(
+                (x, y), width, height, facecolor="white", edgecolor="#167465",
+                linewidth=1.1, zorder=2,
+            ))
+            ax.text(
+                x + width / 2, y + height / 2, label, ha="center", va="center",
+                fontsize=6, color="#172d35", linespacing=1.15, zorder=3,
+            )
 
 
 def make_figure(kind, cases):
-    fig, axes = plt.subplots(2, 3, figsize=(7.09, 5.1))
-    fig.subplots_adjust(left=.09, right=.97, bottom=.10, top=.92, wspace=.55, hspace=.65)
-    design(axes.flat[0], kind)
-    for ax, case in zip(axes.flat[1:], cases):
+    if kind == "methods":
+        fig = plt.figure(figsize=(7.09, 6.2))
+        grid = fig.add_gridspec(3, 4)
+        axes = [
+            fig.add_subplot(grid[0, :]),
+            fig.add_subplot(grid[1, 0]),
+            fig.add_subplot(grid[1, 1]),
+            fig.add_subplot(grid[1, 2]),
+            fig.add_subplot(grid[2, :2]),
+            fig.add_subplot(grid[2, 2:]),
+        ]
+        fig.subplots_adjust(left=.09, right=.97, bottom=.07, top=.94, wspace=.75, hspace=.8)
+    else:
+        fig, axes = plt.subplots(2, 3, figsize=(7.09, 5.1))
+        axes = list(axes.flat)
+        fig.subplots_adjust(left=.09, right=.97, bottom=.10, top=.92, wspace=.55, hspace=.65)
+    design(axes[0], kind)
+    for ax, case in zip(axes[1:], cases):
         plot(ax, fig, *case)
-    for label, ax in zip("ABCDEF", axes.flat):
-        ax.text(-.16, 1.10, label, transform=ax.transAxes,
+    for label, ax in zip("ABCDEF", axes):
+        label_x = -.01 if kind == "methods" and label == "A" else -.16
+        ax.text(label_x, 1.10, label, transform=ax.transAxes,
                 fontsize=10, fontweight="bold", va="top", clip_on=False)
     path = OUTPUT / f"showcase-{kind}.svg"
     fig.savefig(path, format="svg")
