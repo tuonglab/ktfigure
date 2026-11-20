@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
+  <title id="title">One possible figure reading route</title>
+  <desc id="description">A methods workflow and two main comparisons form the first row of a six-panel figure. Three supporting results form the second row.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 8 4 0 8z" fill="#167465"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="620" rx="12" fill="#f8faf8"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#172d35">
+    <text x="48" y="53" font-size="25" font-weight="bold">A possible reading route</text>
+    <text x="48" y="80" font-size="16" fill="#536a70">Context first, main evidence nearby, supporting results below</text>
+    <g fill="none" stroke="#167465" stroke-width="3" marker-end="url(#arrow)">
+      <path d="M240 112 H405"/><path d="M590 112 H755"/>
+    </g>
+    <g text-anchor="middle" font-size="16" font-weight="bold" fill="#167465">
+      <text x="151" y="118">1 · CONTEXT</text><text x="500" y="118">2 · MAIN EVIDENCE</text><text x="849" y="118">3 · MAIN EVIDENCE</text>
+    </g>
+    <g fill="#fff" stroke-width="2">
+      <rect x="48" y="140" width="305" height="180" rx="8" stroke="#b7c8c0"/>
+      <rect x="397" y="140" width="305" height="180" rx="8" stroke="#167465"/>
+      <rect x="746" y="140" width="305" height="180" rx="8" stroke="#167465"/>
+      <rect x="48" y="363" width="305" height="180" rx="8" stroke="#b7c8c0"/>
+      <rect x="397" y="363" width="305" height="180" rx="8" stroke="#b7c8c0"/>
+      <rect x="746" y="363" width="305" height="180" rx="8" stroke="#b7c8c0"/>
+    </g>
+    <g font-size="23" font-weight="bold">
+      <text x="65" y="173">A</text><text x="414" y="173">B</text><text x="763" y="173">C</text>
+      <text x="65" y="396">D</text><text x="414" y="396">E</text><text x="763" y="396">F</text>
+    </g>
+    <g font-size="18" font-weight="bold">
+      <text x="97" y="173">Workflow</text><text x="446" y="173">Accuracy</text><text x="795" y="173">Accuracy vs runtime</text>
+      <text x="97" y="396">Runtime</text><text x="446" y="396">Agreement</text><text x="795" y="396">Score distribution</text>
+    </g>
+    <g fill="none" stroke="#9bb6aa" stroke-width="2">
+      <rect x="103" y="211" width="56" height="30" rx="3"/><rect x="181" y="211" width="56" height="30" rx="3"/><rect x="259" y="211" width="56" height="30" rx="3"/>
+      <path d="M159 226h22m56 0h22"/>
+      <path d="M449 273v-63m0 63h201 M798 273v-63m0 63h201 M100 496v-63m0 63h201 M449 496v-63m0 63h201 M798 496v-63m0 63h201"/>
+    </g>
+    <g fill="#0173b2">
+      <circle cx="491" cy="249" r="5"/><circle cx="491" cy="228" r="5"/><circle cx="491" cy="239" r="5"/>
+      <circle cx="825" cy="253" r="5"/><circle cx="860" cy="243" r="5"/><circle cx="896" cy="231" r="5"/>
+      <circle cx="475" cy="475" r="5"/><circle cx="510" cy="463" r="5"/><circle cx="548" cy="446" r="5"/>
+      <rect x="830" y="459" width="24" height="37"/><rect x="858" y="439" width="24" height="57"/>
+    </g>
+    <g fill="#de8f05">
+      <circle cx="598" cy="239" r="5"/><circle cx="598" cy="216" r="5"/><circle cx="598" cy="225" r="5"/>
+      <circle cx="925" cy="227" r="5"/><circle cx="954" cy="216" r="5"/><circle cx="979" cy="229" r="5"/>
+      <circle cx="574" cy="448" r="5"/><circle cx="610" cy="435" r="5"/><circle cx="635" cy="440" r="5"/>
+      <rect x="886" y="451" width="24" height="45"/><rect x="914" y="470" width="24" height="26"/>
+    </g>
+    <g fill="#eaf5ee" stroke="#167465" stroke-width="2">
+      <rect x="133" y="453" width="42" height="30"/><rect x="236" y="439" width="42" height="36"/>
+    </g>
+    <g font-size="16" fill="#536a70">
+      <text x="48" y="580">SUPPORTING CONTEXT</text>
+      <text x="328" y="580">Preserve variability and limitations, even in less prominent panels.</text>
+    </g>
+  </g>
+</svg>

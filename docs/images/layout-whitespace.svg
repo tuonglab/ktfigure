@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
+  <title id="title">Use whitespace to separate figure panels</title>
+  <desc id="description">A crowded six-panel layout is compared with a similar layout that has aligned panels and consistent gutters.</desc>
+  <defs>
+    <g id="concept">
+      <rect x="12" y="13" width="30" height="18" rx="2" fill="#eaf4f8" stroke="#167465" stroke-width="1.5"/>
+      <rect x="64" y="13" width="30" height="18" rx="2" fill="#fff" stroke="#167465" stroke-width="1.5"/>
+      <rect x="116" y="13" width="30" height="18" rx="2" fill="#fff" stroke="#167465" stroke-width="1.5"/>
+      <path d="M43 22h19m33 0h19" fill="none" stroke="#536a70" stroke-width="1.5"/>
+      <path d="m58 18 4 4-4 4m52-8 4 4-4 4" fill="none" stroke="#536a70" stroke-width="1.5"/>
+    </g>
+    <g id="plot">
+      <path d="M18 10v58h125" fill="none" stroke="#536a70" stroke-width="1.5"/>
+      <path d="M25 57 53 48 78 52 108 28 136 22" fill="none" stroke="#167465" stroke-width="2.5"/>
+      <g fill="#167465"><circle cx="25" cy="57" r="3"/><circle cx="53" cy="48" r="3"/><circle cx="78" cy="52" r="3"/><circle cx="108" cy="28" r="3"/><circle cx="136" cy="22" r="3"/></g>
+    </g>
+  </defs>
+  <rect width="1200" height="620" fill="#f8faf8"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#172d35">
+    <rect x="24" y="24" width="558" height="572" rx="12" fill="#fff" stroke="#dce8e2" stroke-width="2"/>
+    <rect x="618" y="24" width="558" height="572" rx="12" fill="#fff" stroke="#dce8e2" stroke-width="2"/>
+    <text x="54" y="70" font-size="25" font-weight="bold">Crowded</text>
+    <text x="54" y="99" font-size="17" fill="#536a70">Labels and panels compete for space</text>
+    <text x="648" y="70" font-size="25" font-weight="bold">Balanced</text>
+    <text x="648" y="99" font-size="17" fill="#536a70">Consistent gutters separate the panels</text>
+    <g transform="translate(52 146)">
+      <g fill="#fff" stroke="#b7c8c0" stroke-width="1">
+        <rect x="0" y="0" width="157" height="130"/><rect x="160" y="0" width="157" height="130"/><rect x="320" y="0" width="157" height="130"/>
+        <rect x="0" y="133" width="157" height="130"/><rect x="160" y="133" width="157" height="130"/><rect x="320" y="133" width="157" height="130"/>
+      </g>
+      <g font-size="17" font-weight="bold">
+        <text x="5" y="21">A</text><text x="165" y="21">B</text><text x="325" y="21">C</text>
+        <text x="5" y="154">D</text><text x="165" y="154">E</text><text x="325" y="154">F</text>
+      </g>
+      <use href="#concept" x="0" y="34"/>
+      <use href="#plot" x="160" y="33"/><use href="#plot" x="320" y="33"/>
+      <use href="#plot" x="0" y="166"/><use href="#plot" x="160" y="166"/><use href="#plot" x="320" y="166"/>
+      <g font-size="14" fill="#536a70">
+        <text x="177" y="127">Axis label</text><text x="337" y="127">Axis label</text>
+        <text x="17" y="260">Axis label</text><text x="177" y="260">Axis label</text><text x="337" y="260">Axis label</text>
+      </g>
+    </g>
+    <text x="54" y="496" font-size="18" fill="#536a70">The second row touches the labels above it.</text>
+    <text x="54" y="526" font-size="18" fill="#536a70">Panels are hard to distinguish at a glance.</text>
+    <g transform="translate(646 140)">
+      <g fill="#fff" stroke="#b7c8c0" stroke-width="1">
+        <rect x="0" y="0" width="147" height="128"/><rect x="164" y="0" width="147" height="128"/><rect x="328" y="0" width="147" height="128"/>
+        <rect x="0" y="174" width="147" height="128"/><rect x="164" y="174" width="147" height="128"/><rect x="328" y="174" width="147" height="128"/>
+      </g>
+      <g font-size="17" font-weight="bold">
+        <text x="5" y="21">A</text><text x="169" y="21">B</text><text x="333" y="21">C</text>
+        <text x="5" y="195">D</text><text x="169" y="195">E</text><text x="333" y="195">F</text>
+      </g>
+      <use href="#concept" x="0" y="35" transform="translate(7 0) scale(.9 1)"/>
+      <use href="#plot" x="164" y="32" transform="translate(16 0) scale(.9 1)"/><use href="#plot" x="328" y="32" transform="translate(32 0) scale(.9 1)"/>
+      <use href="#plot" x="0" y="206" transform="translate(0 0) scale(.9 1)"/><use href="#plot" x="164" y="206" transform="translate(16 0) scale(.9 1)"/><use href="#plot" x="328" y="206" transform="translate(32 0) scale(.9 1)"/>
+      <g font-size="14" fill="#536a70">
+        <text x="180" y="117">Axis label</text><text x="344" y="117">Axis label</text>
+        <text x="16" y="291">Axis label</text><text x="180" y="291">Axis label</text><text x="344" y="291">Axis label</text>
+      </g>
+      <path d="M76 137v28m-5-23 5-5 5 5m-10 18 5 5 5-5" fill="none" stroke="#167465" stroke-width="2"/>
+      <text x="94" y="156" font-size="15" font-weight="bold" fill="#167465">gutter</text>
+    </g>
+    <text x="648" y="496" font-size="18" fill="#536a70">The concept panel fits within the grid.</text>
+    <text x="648" y="526" font-size="18" fill="#536a70">Gutters leave room for labels and comparison.</text>
+  </g>
+</svg>
