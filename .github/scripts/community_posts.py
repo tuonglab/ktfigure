@@ -3,12 +3,54 @@
 import json
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 
 ENTRIES = Path(__file__).resolve().parents[2] / "docs" / "community" / "entries.json"
 LIMIT = 200
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def resolve_linkedin_short_url(url):
+    opener = urllib.request.build_opener(NoRedirect())
+    for _ in range(5):
+        parsed = urlsplit(url)
+        if (parsed.scheme != "https" or parsed.hostname not in ("lnkd.in", "www.lnkd.in")
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443)):
+            raise ValueError("The LinkedIn short link redirected to an unsupported destination.")
+        request = urllib.request.Request(url, headers={"User-Agent": "ktfigure-community-gallery"})
+        try:
+            with opener.open(request, timeout=15):
+                raise ValueError("The LinkedIn short link did not redirect to a post.")
+        except urllib.error.HTTPError as exc:
+            with exc:
+                location = exc.headers.get("Location")
+                if exc.code not in (301, 302, 303, 307, 308) or not location:
+                    raise ValueError(f"The LinkedIn short link could not be resolved (HTTP {exc.code}).") from exc
+                url = urljoin(url, location)
+        except urllib.error.URLError as exc:
+            raise ValueError("The LinkedIn short link could not be resolved; try the full post URL.") from exc
+        try:
+            target = urlsplit(url)
+            host, port = target.hostname, target.port
+        except ValueError as exc:
+            raise ValueError("The LinkedIn short link redirected to an invalid URL.") from exc
+        if (target.scheme != "https" or target.username is not None or target.password is not None
+                or port not in (None, 443)):
+            raise ValueError("The LinkedIn short link redirected to an unsupported destination.")
+        if host in ("linkedin.com", "www.linkedin.com"):
+            return url
+        if host not in ("lnkd.in", "www.lnkd.in"):
+            raise ValueError("The LinkedIn short link redirected to an unsupported destination.")
+    raise ValueError("The LinkedIn short link has too many redirects.")
 
 
 def parse_post(url):
@@ -19,6 +61,10 @@ def parse_post(url):
         raise ValueError("Invalid post URL.") from exc
     if parsed.scheme != "https" or parsed.username or parsed.password or port not in (None, 443):
         raise ValueError("Use an HTTPS post URL without credentials or a nonstandard port.")
+    if host in ("lnkd.in", "www.lnkd.in"):
+        if not re.fullmatch(r"/(?:p/)?[A-Za-z0-9_-]+/?", parsed.path):
+            raise ValueError("Use a valid LinkedIn short link.")
+        return parse_post(resolve_linkedin_short_url(url.strip()))
     path = unquote(parsed.path)
     if host in ("x.com", "www.x.com", "twitter.com", "www.twitter.com"):
         match = re.fullmatch(r"/([A-Za-z0-9_]{1,15})/status/([0-9]{1,25})/?", path)
@@ -33,7 +79,7 @@ def parse_post(url):
             kind, post_id = match.groups()
             return {"platform": "linkedin", "id": f"{kind}:{post_id}",
                     "url": urlunsplit(("https", "www.linkedin.com", parsed.path.rstrip("/"), "", ""))}
-    raise ValueError("Use a supported public X or LinkedIn post URL, not a profile or short link.")
+    raise ValueError("Use a supported public X or LinkedIn post URL, not a profile or unsupported short link.")
 
 
 def update(entries, operation, url, description=""):

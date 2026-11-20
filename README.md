@@ -142,7 +142,9 @@ default branch. Choose `add` or `remove`, enter the public post URL, and
 optionally add a public description. The workflow commits the link directly
 to the default branch and explicitly dispatches Pages deployment; branch rules
 still apply. It accepts X status links and LinkedIn posts containing an activity,
-share or ugcPost ID. Some LinkedIn links or posts may not support embedding;
+share or ugcPost ID, as well as `lnkd.in` links that resolve to these posts.
+Short-link resolution requires access to LinkedIn's redirect service. Some
+LinkedIn links or posts may not support embedding;
 use the original post link shown on each card. The gallery retains the latest
 200 posts. No AI screening is used, although GitHub Actions runner usage may
 incur charges. For a local preview, serve `docs/` over HTTP.
