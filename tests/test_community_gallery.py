@@ -142,6 +142,28 @@ def test_rejects_missing_permission_invalid_links_and_external_redirects(tmp_pat
         )
 
 
+def test_github_attachment_bucket_redirect_is_allowed():
+    url = "https://github-production-user-asset-6210df.s3.amazonaws.com/image?signature=secret"
+    redirected = gallery.SafeRedirect().redirect_request(
+        Request("https://github.com/"), None, 302, "", {}, url
+    )
+    assert redirected.full_url == url
+
+
+@pytest.mark.parametrize("url", [
+    "https://attacker.s3.amazonaws.com/image?signature=secret",
+    "https://github-production-user-asset-6210df.s3.amazonaws.com.evil.example/image",
+    "https://user:password@github-production-user-asset-6210df.s3.amazonaws.com/image",
+    "https://github-production-user-asset-6210df.s3.amazonaws.com:444/image",
+    "http://github-production-user-asset-6210df.s3.amazonaws.com/image",
+])
+def test_redirect_rejects_untrusted_destinations_without_leaking_url(url):
+    with pytest.raises(gallery.GalleryError, match="unsupported host") as error:
+        gallery.SafeRedirect().redirect_request(Request("https://github.com/"), None, 302, "", {}, url)
+    assert "secret" not in str(error.value)
+    assert "password" not in str(error.value)
+
+
 def test_prune_removes_oldest_and_preserves_newest(tmp_path, monkeypatch):
     monkeypatch.setattr(gallery, "ITEMS", tmp_path)
     monkeypatch.setattr(gallery, "LIMIT", 2)

@@ -154,7 +154,10 @@ Copilot CLI usage billed to the organization, and repository administrators
 must enable **Settings → Actions → General → Workflow permissions → Allow
 GitHub Actions to create and approve pull requests**. Standard GitHub-hosted
 runners are used. If a workflow fails, inspect the run before retrying: a pull
-request may already exist or have merged.
+request may already exist or have merged. To retry an open gallery issue that
+has no open submission pull request, a maintainer can run `Prepare community
+figure` from the Actions tab on the default branch and supply its issue number.
+The retry performs the same validation and screening as a new submission.
 
 The gallery displays at most 200 figures. Submission pull requests
 remove the oldest files when necessary; a separate retention workflow proposes

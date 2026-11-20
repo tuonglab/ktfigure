@@ -3,12 +3,22 @@ name: Prepare community figure
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Gallery issue number to retry"
+        required: true
+        type: string
 
 permissions: {}
 
+concurrency:
+  group: community-submission-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
 jobs:
   prepare:
-    if: startsWith(github.event.issue.title, '[Gallery]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.issue.title, '[Gallery]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,24 +27,44 @@ jobs:
     outputs:
       branch: ${{ steps.open.outputs.branch }}
       sha: ${{ steps.open.outputs.sha }}
+      issue_number: ${{ steps.issue.outputs.number }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install -r .github/scripts/gallery-requirements.txt
-      - name: Validate and compress submission
+      - name: Validate issue and check for an existing pull request
+        id: issue
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
         run: |
+          set -eu
+          if ! [[ "$ISSUE_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid issue number." >&2
+            exit 1
+          fi
+          echo "number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
           gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$RUNNER_TEMP/issue.json"
+          if ! jq -e '(.title | startswith("[Gallery]")) and .state == "open" and (.pull_request == null)' "$RUNNER_TEMP/issue.json" >/dev/null; then
+            echo "The issue must be an open gallery submission." >&2
+            exit 1
+          fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" \
+            --jq '.[].head.ref' > "$RUNNER_TEMP/gallery-pr-branches"
+          if grep -q "^community/figure-$ISSUE_NUMBER-" "$RUNNER_TEMP/gallery-pr-branches"; then
+            echo "An open pull request already exists for this submission; inspect it instead of retrying." >&2
+            exit 1
+          fi
+      - name: Validate and compress submission
+        run: |
           python .github/scripts/community_gallery.py submit --issue "$RUNNER_TEMP/issue.json"
       - name: Open a review pull request
         id: open
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
@@ -69,7 +99,7 @@ jobs:
       - name: Screen the image and submission text
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
         run: node .github/scripts/community-moderation/screen.mjs "docs/community/items/$ISSUE_NUMBER.json"
 
   publish:
@@ -93,7 +123,7 @@ jobs:
 
   report-hold:
     needs: [prepare, screen, publish]
-    if: always() && needs.prepare.result != 'skipped' && (needs.prepare.result != 'success' || needs.screen.result != 'success' || needs.publish.result != 'success')
+    if: always() && needs.prepare.result != 'skipped' && (github.event.issue.number || needs.prepare.outputs.issue_number) && (needs.prepare.result != 'success' || needs.screen.result != 'success' || needs.publish.result != 'success')
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -101,7 +131,7 @@ jobs:
       - name: Request maintainer review
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || needs.prepare.outputs.issue_number }}
         run: |
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
             --body "Automatic publication did not complete. A maintainer should review this submission and inspect the Actions run. The review may have flagged the content or been unavailable, or publication may have failed; a pull request may already exist or have merged."

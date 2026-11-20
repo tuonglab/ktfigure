@@ -24,6 +24,7 @@ Image.MAX_IMAGE_PIXELS = 20_000_000
 ASSET = re.compile(r"https://github\.com/user-attachments/assets/[0-9a-fA-F-]{36}\b")
 REDIRECT_HOSTS = {
     "github.com",
+    "github-production-user-asset-6210df.s3.amazonaws.com",
     "objects.githubusercontent.com",
     "private-user-images.githubusercontent.com",
     "release-assets.githubusercontent.com",
@@ -37,15 +38,21 @@ class GalleryError(ValueError):
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        parsed = urllib.parse.urlsplit(newurl)
+        try:
+            parsed = urllib.parse.urlsplit(newurl)
+            host = parsed.hostname
+            port = parsed.port
+        except ValueError as exc:
+            raise GalleryError("The image redirected to an invalid URL.") from exc
         if (
             parsed.scheme != "https"
-            or parsed.hostname not in REDIRECT_HOSTS
+            or host not in REDIRECT_HOSTS
             or parsed.username is not None
             or parsed.password is not None
-            or parsed.port not in (None, 443)
+            or port not in (None, 443)
         ):
-            raise GalleryError("The image redirected to an unsupported host.")
+            safe_host = host if host and re.fullmatch(r"[a-z0-9.-]{1,253}", host) else "<invalid>"
+            raise GalleryError(f"The image redirected to an unsupported host ({safe_host}).")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
