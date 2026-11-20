@@ -98,6 +98,9 @@ tbody th { min-width: 130px; }
 .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 28px 0; }
 .comparison > div { padding: 18px; border: 1px solid var(--line); border-radius: 6px; }
 .comparison p { margin: 12px 0 0; color: var(--muted); font-size: .9rem; }
+.concept-comparison figure { margin: 14px 0; }
+.concept-comparison figure img { width: 100%; box-shadow: none; }
+.concept-comparison figcaption { line-height: 1.45; }
 .example-layout { height: 190px; padding: 10px; border: 1px solid var(--line); background: white; }
 .example-layout span { display: block; border: 1px solid #9db8ac; }
 .good { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

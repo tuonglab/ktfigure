@@ -33,10 +33,10 @@
         <h1>Make every detail<br>serve the evidence.</h1>
         <p class="lead">A concise checklist for aligning panels, choosing type and colour, exporting at the right size, and checking scientific accuracy.</p>
         <div class="actions">
-          <a class="button" href="#checklist">Review the checklist <span aria-hidden="true">↓</span></a>
+          <a class="button" href="#good-bad">Start with the comparison <span aria-hidden="true">↓</span></a>
         </div>
         <div class="actions action-choices" aria-label="Checklist sections">
-          <a class="button button-secondary" href="#good-bad">Clear vs cluttered <span aria-hidden="true">↓</span></a>
+          <a class="button button-secondary" href="#checklist">Publication checklist <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#export">Export and resolution <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#ai">Concept art and AI <span aria-hidden="true">↓</span></a>
         </div>
@@ -82,7 +82,34 @@
           <p class="eyebrow">Concept figures / Provenance</p>
           <h2>Draw the real experiment.</h2>
           <p>AI-generated illustrations can invent biological structures, labels or relationships and may raise provenance or journal-policy issues. Do not treat generated imagery as scientific evidence. Verify every element with domain expertise and follow the journal's disclosure rules.</p>
-          <p>For a simple study design or methods workflow, use ktfigure's <strong>Rectangle</strong>, <strong>Line</strong> and <strong>Text</strong> tools to build only the steps and relationships that actually occurred. Keep connector lines out of text areas; use a vector editor to add final labels and arrowheads after export.</p>
+          <h3>One study, two visual approaches</h3>
+          <p>Imagine a fictional study with a control and a treatment group sampled at 0, 24 and 48 hours. The same schedule can be obscured by decoration or made explicit with a few labelled shapes.</p>
+          <div class="comparison concept-comparison">
+            <div>
+              <h3>Intricate, but unclear</h3>
+              <figure>
+                <img src="images/concept-intricate.svg" alt="An elaborate schematic with decorative cells, molecular shapes and tangled lines around a small time-course schedule." loading="lazy" width="640" height="420">
+                <figcaption>An intentionally cluttered, hand-drawn mock-up of an AI-style illustration—not an actual AI-generated image.</figcaption>
+              </figure>
+              <p>Decorative biology competes with the schedule. The visual detail could suggest mechanisms or tissue structures that the experiment did not establish; it also becomes hard to inspect at print size.</p>
+            </div>
+            <div>
+              <h3>Simple and specific</h3>
+              <figure>
+                <img src="images/concept-simple.svg" alt="A simple study diagram showing control and treatment rows, each sampled at 0, 24 and 48 hours." loading="lazy" width="640" height="420">
+                <figcaption>A schematic of the same fictional schedule, using boxes, labels and connectors.</figcaption>
+              </figure>
+              <p>The group labels and time points carry the story. Whitespace separates the lanes, and nothing implies an unmeasured mechanism. Simplicity does not replace scientific detail when it is needed.</p>
+            </div>
+          </div>
+          <h3>Recreate the simpler version in ktfigure</h3>
+          <ol class="steps">
+            <li>Write down the actual groups, interventions and sampling times first. Include randomisation, a biological process or an outcome only if it is relevant and supported by the study.</li>
+            <li>Draw a <strong>Rectangle</strong> for each group and three matching rectangles per row for the time points. Use <strong>Text</strong> for the group and sample labels; align the boxes and leave space around the words.</li>
+            <li>Connect adjacent boxes with <strong>Line</strong> segments, keeping the lines between boxes rather than beneath labels. Select shapes to keep outlines and line widths consistent. Add panel labels and units where they help the reader.</li>
+            <li>Export with at least one plot on the artboard as PDF or SVG. In the current version, text annotations and arrowheads must be added in a vector editor after export; inspect the final file at its intended size.</li>
+          </ol>
+          <p>Use an AI-generated draft only if your institution and journal permit it: check the provenance and disclosure requirements, then independently verify or redraw every label, shape and relationship against the actual protocol. A polished image is not a substitute for evidence.</p>
           <div class="end">
             <p>Try the tutorials</p>
             <div class="actions action-choices">
