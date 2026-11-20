@@ -35,7 +35,7 @@
         <h1>Made with ktfigure.</h1>
         <p class="lead">Share a panel or figure, see how others tell their stories, and join the conversation about their work.</p>
         <div class="actions">
-          <a class="button" href="https://github.com/tuonglab/ktfigure/issues/new?template=community-figure.yml">Share your figure <span aria-hidden="true">↗</span></a>
+          <a class="button" href="#share">Share your figure <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="#gallery">Explore the gallery <span aria-hidden="true">↓</span></a>
         </div>
       </div>
@@ -44,20 +44,28 @@
       <section id="gallery">
         <p class="eyebrow">Community submissions</p>
         <h2>Figures and conversations.</h2>
-        <p>Each submission has a public GitHub issue where you can read and add comments. A GitHub account is required to submit or comment.</p>
+        <p>Explore posts shared by the community. Visit the original post to join the conversation.</p>
+        <p>Embeds load content from X or LinkedIn, which may receive your browser information. If a post is unavailable, use its original link.</p>
         <p id="gallery-status" role="status">Loading community figures…</p>
         <div id="community-entries" class="community-grid"></div>
       </section>
       <section id="share" class="community-share">
         <p class="eyebrow">How to share</p>
         <h2>Join the gallery.</h2>
-        <ol>
-          <li>Open the submission form and attach one JPEG or PNG of at most 10 MiB. We resize and compress it to under 1 MB for the gallery.</li>
-          <li>Add an optional display name, figure description, feedback, citation, DOI and project link. Leave the name blank to display “Anonymous”. Your GitHub username and issue remain public.</li>
-          <li>Confirm that you have permission to publish the image. Copilot screens the image and text; clear passes are merged automatically, while flagged or unavailable reviews go to a maintainer.</li>
-        </ol>
-        <p>Do not submit pornographic, hateful, harassing or graphically violent content. Automated screening can make mistakes. The gallery keeps up to 200 figures, removing the oldest through pull requests. Deleted files remain in Git history, and the original attachment remains on the public issue. Do not upload unpublished or sensitive material.</p>
-        <a class="button" href="https://github.com/tuonglab/ktfigure/issues/new?template=community-figure.yml">Open the submission form <span aria-hidden="true">↗</span></a>
+        <p>Share a public X or LinkedIn post containing your figure. Please do not attach images or submit unpublished or sensitive material. A maintainer reviews submissions before adding posts to the gallery.</p>
+        <p>This form sends your details to the maintainer through Formspree; they are not posted as a GitHub issue. The post itself remains public on its original platform. Optional details will be shared publicly only if approved for publication.</p>
+        <form class="community-form" action="https://formspree.io/f/maeodywg" method="POST">
+          <label for="post-url">Public X or LinkedIn post URL <span aria-hidden="true">*</span></label>
+          <input id="post-url" name="post_url" type="url" required maxlength="2000" placeholder="https://..." autocomplete="url">
+          <label for="submitter-name">Name (optional)</label>
+          <input id="submitter-name" name="name" maxlength="100" autocomplete="name">
+          <label for="submitter-email">Email for a reply (optional)</label>
+          <input id="submitter-email" name="email" type="email" maxlength="254" autocomplete="email">
+          <label for="submission-details">Figure description, feedback, citation, DOI or project link (optional)</label>
+          <textarea id="submission-details" name="details" rows="5" maxlength="3000"></textarea>
+          <label class="community-consent"><input type="checkbox" name="permission" value="yes" required> I have permission to share this post and its figure publicly.</label>
+          <button class="button" type="submit">Send submission</button>
+        </form>
       </section>
     </div>
   </main>
