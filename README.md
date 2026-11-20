@@ -40,7 +40,29 @@
 
 ## Installation
 
-**Requirements:** Python 3.10 or higher
+### Download the desktop app
+
+Download the archive for your computer from the
+[latest GitHub release](https://github.com/tuonglab/ktfigure/releases/latest).
+No Python or Git installation is needed.
+
+| Computer | Download | Open |
+|---|---|---|
+| Windows 64-bit | `ktfigure-windows-x64.zip` | Extract the zip, then double-click `ktfigure/ktfigure.exe`. |
+| macOS Apple silicon | `ktfigure-macos-arm64.zip` | Extract the zip, then double-click `ktfigure.app`. |
+| macOS Intel | `ktfigure-macos-x64.zip` | Extract the zip, then double-click `ktfigure.app`. |
+| Linux x86-64 | `ktfigure-linux-x64.tar.gz` | Extract the archive, then open `ktfigure/ktfigure`. A graphical desktop is required. |
+
+Keep the extracted application and its accompanying files together. These builds
+are not code-signed or notarized, so Windows SmartScreen or macOS Gatekeeper may
+warn when opening them. On macOS, if the app is blocked, open **System Settings
+→ Privacy & Security** and use **Open Anyway** after verifying the download.
+On Linux, if the file manager will not launch the app, allow it to run as a
+program in its properties or run `./ktfigure/ktfigure` from a terminal.
+
+### Install from source
+
+**Requirements:** Python 3.10 or higher, Git and Tkinter.
 
 ```bash
 git clone https://github.com/tuonglab/ktfigure.git
@@ -62,7 +84,8 @@ For a step-by-step guide with screenshots and styling examples, see the
 
 ### 1. Launch the application
 
-After installation, run either of the following commands:
+Open the downloaded app as described above. If you installed from source, run
+either of the following commands:
 
 ```bash
 ktfigure
@@ -127,6 +150,16 @@ To regenerate the synthetic six-panel showcase illustrations, run:
 ```bash
 python .github/scripts/generate_showcase_figures.py
 ```
+
+### Desktop releases
+
+Push a version tag such as `v1.0.1` to run **Build desktop apps**. It builds
+and smoke-tests the four archives on their target platforms, then publishes them
+in a GitHub release only after all builds succeed. The workflow can also be run
+manually to build downloadable Actions artifacts without publishing a release.
+The release links above and on the tutorial site become available once the
+first desktop release is published. Builds are unsigned; signing and macOS
+notarization require separate credentials and configuration.
 
 ### Community gallery
 
