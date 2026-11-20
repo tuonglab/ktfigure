@@ -1,8 +1,16 @@
 import numpy as np
 import pandas as pd
 import pytest
+import runpy
 
 from ktfigure.gpu_preview import prepare_points, run_file, show_preview
+
+
+def test_python_module_launches_main(monkeypatch):
+    calls = []
+    monkeypatch.setattr("ktfigure.main", lambda: calls.append(True))
+    runpy.run_module("ktfigure", run_name="__main__")
+    assert calls == [True]
 
 
 def test_prepare_points_keeps_finite_pairs_and_original_precision():

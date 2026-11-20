@@ -13,6 +13,7 @@ human interaction is needed — we drive the app programmatically.
 import copy
 import os
 import sys
+import tempfile
 import pytest
 import numpy as np
 import pandas as pd
@@ -79,6 +80,86 @@ def test_gpu_preview_launches_selected_numeric_columns():
             launch.return_value.poll.return_value = 0
             after.call_args.args[1]()
             assert not os.path.exists(path)
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_validates_selection_and_cancellation():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.showwarning") as warn, \
+             patch("ktfigure.messagebox.askokcancel", return_value=False), \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._plot_type.set("line")
+            dialog._gpu_preview()
+            dialog._plot_type.set("scatter")
+            dialog._col_x.set("missing")
+            dialog._gpu_preview()
+            dialog._col_x.set("x")
+            dialog._gpu_preview()
+            assert warn.call_count == 2
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_reports_spawn_failure_and_removes_data(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    make_temp = tempfile.mkstemp
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.tempfile.mkstemp",
+                   side_effect=lambda suffix: make_temp(suffix=suffix, dir=tmp_path)), \
+             patch("ktfigure.subprocess.Popen", side_effect=OSError("cannot launch")):
+            dialog._gpu_preview()
+            assert "cannot launch" in error.call_args.args[1]
+            assert not list(tmp_path.iterdir())
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_rejects_non_numeric_data():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": ["bad"], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            error.assert_called_once()
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_frozen_gpu_preview_uses_bundled_executable():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch.object(sys, "frozen", True, create=True), \
+             patch("ktfigure.subprocess.Popen") as launch, \
+             patch.object(root, "after") as after:
+            dialog._gpu_preview()
+            command = launch.call_args.args[0]
+            assert command[:2] == [sys.executable, "--gpu-preview"]
+            launch.return_value.poll.return_value = None
+            after.call_args.args[1]()
+            assert after.call_count == 2
+            launch.return_value.poll.return_value = 0
+            after.call_args.args[1]()
+            assert not os.path.exists(command[-1])
     finally:
         dialog.destroy()
         root.destroy()
