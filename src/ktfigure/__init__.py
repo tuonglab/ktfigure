@@ -28,7 +28,7 @@ import tkinter as tk
 
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.patches import Ellipse, Rectangle
+from matplotlib.patches import Ellipse, Polygon, Rectangle
 from tkinter import ttk, filedialog, messagebox, colorchooser
 
 FONTTYPE = 42
@@ -6573,6 +6573,15 @@ class KTFigure:
                     continue
                 img = block._pil_img.convert("RGBA")
                 canvas_img.paste(img, (int(block.x1), int(block.y1)), img.split()[3])
+            if self._shapes or self._texts:
+                fig = Figure(figsize=(A4_W / DPI, A4_H / DPI), dpi=DPI)
+                fig.patch.set_alpha(0)
+                self._draw_overlay(fig.add_axes([0, 0, 1, 1], frameon=False))
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", dpi=DPI, transparent=True)
+                buf.seek(0)
+                overlay = Image.open(buf).convert("RGBA")
+                canvas_img.paste(overlay, (0, 0), overlay.split()[3])
             canvas_img.save(path, dpi=(DPI, DPI))
         except Exception as exc:
             messagebox.showerror("Export error", str(exc), parent=self.root)
@@ -6613,9 +6622,122 @@ class KTFigure:
         except Exception as exc:
             messagebox.showerror("Export error", str(exc), parent=self.root)
 
+    def _draw_overlay(self, ax_main):
+        """Draw shapes and text objects onto a full-artboard axes."""
+        ax_main.set_xlim(0, A4_W)
+        ax_main.set_ylim(0, A4_H)
+        ax_main.invert_yaxis()  # Match canvas coordinates
+        ax_main.axis("off")
+
+        for shape in self._shapes:
+            if shape.shape_type == "line":
+                self._add_line_to_ax(ax_main, shape)
+            elif shape.shape_type == "rectangle":
+                rect = Rectangle(
+                    (shape.x1, shape.y1),
+                    shape.x2 - shape.x1,
+                    shape.y2 - shape.y1,
+                    edgecolor=shape.color,
+                    facecolor=shape.fill if shape.fill else "none",
+                    linewidth=shape.line_width,
+                    linestyle=self._shape_linestyle(shape),
+                )
+                ax_main.add_patch(rect)
+            elif shape.shape_type == "circle":
+                # Use Ellipse for circles/ovals
+                cx = (shape.x1 + shape.x2) / 2
+                cy = (shape.y1 + shape.y2) / 2
+                w = shape.x2 - shape.x1
+                h = shape.y2 - shape.y1
+                circle = Ellipse(
+                    (cx, cy),
+                    w,
+                    h,
+                    edgecolor=shape.color,
+                    facecolor=shape.fill if shape.fill else "none",
+                    linewidth=shape.line_width,
+                    linestyle=self._shape_linestyle(shape),
+                )
+                ax_main.add_patch(circle)
+
+        for t in self._texts:
+            ax_main.text(
+                t.center_x,
+                t.center_y,
+                t.text,
+                ha="center",
+                va="center",
+                multialignment="left",
+                color=t.color,
+                fontsize=t.font_size,
+                fontfamily=t.font_family,
+                fontweight="bold" if t.bold else "normal",
+                fontstyle="italic" if t.italic else "normal",
+            )
+
+    @staticmethod
+    def _shape_linestyle(shape):
+        """Translate a Tk dash pattern to matplotlib points."""
+        if not shape.dash:
+            return "-"
+        lw = max(shape.line_width, 1)
+        return (0, tuple(d * 72 / DPI / lw for d in shape.dash))
+
+    @staticmethod
+    def _add_line_to_ax(ax, shape):
+        """Add a line shape (with dash pattern and arrowheads) to *ax*."""
+        x1, y1, x2, y2 = shape.x1, shape.y1, shape.x2, shape.y2
+        length = math.hypot(x2 - x1, y2 - y1)
+        linestyle = KTFigure._shape_linestyle(shape)
+
+        heads = []  # (tip_x, tip_y, unit vector pointing toward the tip)
+        if length > 0 and shape.arrow:
+            ux, uy = (x2 - x1) / length, (y2 - y1) / length
+            if shape.arrow in ("last", "both"):
+                heads.append((x2, y2, ux, uy))
+            if shape.arrow in ("first", "both"):
+                heads.append((x1, y1, -ux, -uy))
+        d1, d2, d3 = _compute_arrowshape(shape.arrowshape_style, shape.arrow_size)
+
+        # Pull the line back to each arrowhead's neck, as Tk does.
+        sx, sy, ex, ey = x1, y1, x2, y2
+        for tx, ty, ux, uy in heads:
+            if (tx, ty) == (x2, y2):
+                ex, ey = tx - ux * d1, ty - uy * d1
+            else:
+                sx, sy = tx - ux * d1, ty - uy * d1
+        ax.add_line(
+            Line2D(
+                [sx, ex],
+                [sy, ey],
+                color=shape.color,
+                linewidth=shape.line_width,
+                linestyle=linestyle,
+                solid_capstyle="butt",
+                dash_capstyle="butt",
+            )
+        )
+        for tx, ty, ux, uy in heads:
+            nx, ny = -uy, ux
+            pts = [
+                (tx, ty),
+                (tx - ux * d2 + nx * d3, ty - uy * d2 + ny * d3),
+                (tx - ux * d1, ty - uy * d1),
+                (tx - ux * d2 - nx * d3, ty - uy * d2 - ny * d3),
+            ]
+            ax.add_patch(
+                Polygon(
+                    pts,
+                    closed=True,
+                    facecolor=shape.color,
+                    edgecolor=shape.color,
+                    linewidth=0,
+                )
+            )
+
     def _export_vector(self, path, fmt):
         """Export artboard as PDF or SVG using matplotlib."""
-        if not self._blocks:
+        if not (self._blocks or self._shapes or self._texts):
             raise ValueError("No plots to export")
 
         # Create a figure matching A4 size
@@ -6639,47 +6761,8 @@ class KTFigure:
             # Render the plot
             PlotRenderer.render_to_ax(block, ax, fig)
 
-        # Render shapes
         ax_main = fig.add_axes([0, 0, 1, 1], frameon=False)
-        ax_main.set_xlim(0, A4_W)
-        ax_main.set_ylim(0, A4_H)
-        ax_main.invert_yaxis()  # Match canvas coordinates
-        ax_main.axis("off")
-
-        for shape in self._shapes:
-            if shape.shape_type == "line":
-                line = Line2D(
-                    [shape.x1, shape.x2],
-                    [shape.y1, shape.y2],
-                    color=shape.color,
-                    linewidth=shape.line_width,
-                )
-                ax_main.add_line(line)
-            elif shape.shape_type == "rectangle":
-                rect = Rectangle(
-                    (shape.x1, shape.y1),
-                    shape.x2 - shape.x1,
-                    shape.y2 - shape.y1,
-                    edgecolor=shape.color,
-                    facecolor=shape.fill if shape.fill else "none",
-                    linewidth=shape.line_width,
-                )
-                ax_main.add_patch(rect)
-            elif shape.shape_type == "circle":
-                # Use Ellipse for circles/ovals
-                cx = (shape.x1 + shape.x2) / 2
-                cy = (shape.y1 + shape.y2) / 2
-                w = shape.x2 - shape.x1
-                h = shape.y2 - shape.y1
-                circle = Ellipse(
-                    (cx, cy),
-                    w,
-                    h,
-                    edgecolor=shape.color,
-                    facecolor=shape.fill if shape.fill else "none",
-                    linewidth=shape.line_width,
-                )
-                ax_main.add_patch(circle)
+        self._draw_overlay(ax_main)
 
         # Save as vector format
         fig.savefig(path, format=fmt, dpi=DPI)

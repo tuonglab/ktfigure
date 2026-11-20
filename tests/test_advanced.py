@@ -851,6 +851,48 @@ class TestExportVectorWithShapes:
         import os
         assert os.path.exists(out)
 
+    def test_export_svg_includes_text_and_arrowheads(self, tmp_path):
+        from ktfigure import TextObject
+        t = TextObject(100, 100, "Hello annotation")
+        t.bold = True
+        self.app._texts.append(t)
+        line = Shape(100, 300, 400, 300, "line")
+        line.arrow = "both"
+        line.dash = (5, 5)
+        self.app._shapes.append(line)
+        out = str(tmp_path / "out.svg")
+        self.app._export_vector(out, "svg")
+        content = open(out).read()
+        assert "Hello annotation" in content or "glyph" in content
+        assert content.count("<path") >= 3  # line + two arrowheads
+        assert "stroke-dasharray" in content
+
+    def test_overlay_arrowhead_geometry(self):
+        from matplotlib.figure import Figure
+        line = Shape(0, 0, 100, 0, "line")
+        line.arrow = "last"
+        ax = Figure().add_axes([0, 0, 1, 1])
+        self.app._add_line_to_ax(ax, line)
+        assert len(ax.patches) == 1
+        xs = [p[0] for p in ax.patches[0].get_xy()]
+        assert max(xs) == 100
+        assert ax.lines[0].get_xdata()[1] == 92  # pulled back to arrow neck
+
+    def test_overlay_preserves_dashed_rectangle_and_circle(self, tmp_path):
+        from matplotlib.figure import Figure
+        rect = Shape(10, 10, 100, 100, "rectangle")
+        circle = Shape(120, 10, 200, 100, "circle")
+        rect.dash = circle.dash = (5, 3)
+        self.app._shapes.extend((rect, circle))
+        ax = Figure().add_axes([0, 0, 1, 1])
+        self.app._draw_overlay(ax)
+        assert len(ax.patches) == 2
+        assert all(patch.get_linestyle() != "solid" for patch in ax.patches)
+        out = str(tmp_path / "dashed.svg")
+        self.app._export_vector(out, "svg")
+        content = open(out).read()
+        assert content.count("stroke-dasharray") >= 2
+
     @pytest.fixture
     def sample_df(self):
         return pd.DataFrame({
