@@ -615,6 +615,21 @@ class TestShapeOperations:
         self.app._draw_shape(shape)
         found = self.app._shape_at(200, 200)
         assert found == shape
+        assert len(self.app._shape_hit_regions) == 1
+
+    def test_shape_at_checks_only_shapes_in_nearby_cells(self):
+        shape = Shape(100, 100, 300, 300, "rectangle")
+        self.app._shapes.append(shape)
+        self.app._draw_shape(shape)
+        for i in range(1000):
+            distractor = Shape(2000 + i * 100, 2000, 2010 + i * 100, 2010, "rectangle")
+            self.app._shapes.append(distractor)
+            self.app._draw_shape(distractor)
+        with patch.object(
+            self.app, "_shape_contains_point", wraps=self.app._shape_contains_point
+        ) as contains:
+            assert self.app._shape_at(200, 200) is shape
+        contains.assert_called_once_with(shape, 200, 200, 0)
 
     def test_shape_at_outside(self):
         shape = Shape(100, 100, 200, 200, "rectangle")
@@ -622,6 +637,31 @@ class TestShapeOperations:
         self.app._draw_shape(shape)
         found = self.app._shape_at(500, 500)
         assert found is None
+
+    def test_indexed_line_hit_preserves_minimum_hit_area(self):
+        shape = Shape(100, 200, 300, 200, "line")
+        self.app._shapes.append(shape)
+        self.app._draw_shape(shape)
+        assert self.app._shape_at(200, 206) is shape
+        assert self.app._shape_at(200, 207) is None
+
+    def test_large_shape_uses_fallback_index(self):
+        shape = Shape(0, 0, 1000, 1000, "rectangle")
+        self.app._shapes.append(shape)
+        self.app._draw_shape(shape)
+        assert self.app._shape_at(900, 900) is shape
+        assert self.app._shape_hit_regions[id(shape)][0]
+
+    def test_index_updates_when_shape_moves(self):
+        shape = Shape(100, 100, 200, 200, "rectangle")
+        self.app._shapes.append(shape)
+        self.app._draw_shape(shape)
+        assert self.app._shape_at(150, 150) is shape
+
+        shape.x1, shape.y1, shape.x2, shape.y2 = 400, 400, 500, 500
+        self.app._draw_shape(shape)
+        assert self.app._shape_at(150, 150) is None
+        assert self.app._shape_at(450, 450) is shape
 
     def test_select_shape(self):
         shape = Shape(100, 100, 200, 200, "rectangle")

@@ -2318,6 +2318,9 @@ def _ktf_pinch_invoke(block_ptr, event_ptr):
 # Main Application
 # ---------------------------------------------------------------------------
 class KTFigure:
+    _SHAPE_HIT_CELL_SIZE = 64
+    _SHAPE_HIT_MAX_CELLS = 64
+
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("ktfigure")
@@ -2352,6 +2355,12 @@ class KTFigure:
 
         # Shape drawing
         self._shapes: list[Shape] = []
+        self._shape_hit_cells: dict[tuple[int, int], list[Shape]] = {}
+        self._shape_hit_large: list[Shape] = []
+        self._shape_hit_regions: dict[int, tuple[bool, tuple[tuple[int, int], ...]]] = {}
+        self._shape_hit_order: dict[int, int] = {}
+        self._next_shape_hit_order = 0
+        self._shape_hit_index_dirty = True
         self._selected_shape: Shape | None = None
         self._drag_shape: Shape | None = None
         self._guide_object = None  # Can be PlotBlock or Shape
@@ -3409,6 +3418,7 @@ class KTFigure:
         self._blocks = ab["blocks"]
         self._shapes = ab["shapes"]
         self._texts = ab["texts"]
+        self._reset_shape_hit_index()
         self._undo_stack = ab["undo_stack"]
         self._redo_stack = ab["redo_stack"]
         # All boards stay on-screen; just refresh the artboard borders and grid.
@@ -3499,20 +3509,103 @@ class KTFigure:
 
     def _shape_at(self, bx, by, pad=0):
         """Find shape at given board coordinates."""
+        if self._shape_hit_index_dirty:
+            self._rebuild_shape_hit_index()
+        if len(self._shape_hit_regions) == len(self._shapes):
+            radius = max(pad, 6)
+            cell_size = self._SHAPE_HIT_CELL_SIZE
+            x_min = math.floor((bx - radius) / cell_size)
+            x_max = math.floor((bx + radius) / cell_size)
+            y_min = math.floor((by - radius) / cell_size)
+            y_max = math.floor((by + radius) / cell_size)
+            candidates = {id(shape): shape for shape in self._shape_hit_large}
+            for cell_x in range(x_min, x_max + 1):
+                for cell_y in range(y_min, y_max + 1):
+                    for shape in self._shape_hit_cells.get((cell_x, cell_y), ()):
+                        candidates[id(shape)] = shape
+            ordered = sorted(
+                candidates.values(),
+                key=lambda shape: self._shape_hit_order[id(shape)],
+                reverse=True,
+            )
+            for s in ordered:
+                if self._shape_contains_point(s, bx, by, pad):
+                    return s
+            return None
+
         for s in reversed(self._shapes):
-            # Normalise coords so min <= max (lines preserve drawing direction so
-            # x1/y1 are not guaranteed to be the smaller values).
-            x_min, x_max = min(s.x1, s.x2), max(s.x1, s.x2)
-            y_min, y_max = min(s.y1, s.y2), max(s.y1, s.y2)
-            # Lines can be horizontal/vertical (zero height/width), so ensure a
-            # minimum 6-pixel hit area so they stay clickable.
-            eff_pad = max(pad, 6) if s.shape_type == "line" else pad
-            if (
-                x_min - eff_pad <= bx <= x_max + eff_pad
-                and y_min - eff_pad <= by <= y_max + eff_pad
-            ):
+            if self._shape_contains_point(s, bx, by, pad):
                 return s
         return None
+
+    def _reset_shape_hit_index(self):
+        self._shape_hit_cells.clear()
+        self._shape_hit_large.clear()
+        self._shape_hit_regions.clear()
+        self._shape_hit_order.clear()
+        self._next_shape_hit_order = 0
+        self._shape_hit_index_dirty = True
+
+    def _rebuild_shape_hit_index(self):
+        self._reset_shape_hit_index()
+        for shape in self._shapes:
+            if shape.item_id:
+                self._index_shape(shape)
+        self._shape_hit_index_dirty = False
+
+    def _index_shape(self, shape):
+        key = id(shape)
+        if key not in self._shape_hit_order:
+            self._shape_hit_order[key] = self._next_shape_hit_order
+            self._next_shape_hit_order += 1
+        x_min = math.floor(min(shape.x1, shape.x2) / self._SHAPE_HIT_CELL_SIZE)
+        x_max = math.floor(max(shape.x1, shape.x2) / self._SHAPE_HIT_CELL_SIZE)
+        y_min = math.floor(min(shape.y1, shape.y2) / self._SHAPE_HIT_CELL_SIZE)
+        y_max = math.floor(max(shape.y1, shape.y2) / self._SHAPE_HIT_CELL_SIZE)
+        cell_count = (x_max - x_min + 1) * (y_max - y_min + 1)
+        self._remove_shape_hit_region(shape)
+        if cell_count > self._SHAPE_HIT_MAX_CELLS:
+            self._shape_hit_large.append(shape)
+            self._shape_hit_regions[key] = (True, ())
+            return
+        cells = tuple(
+            (cell_x, cell_y)
+            for cell_x in range(x_min, x_max + 1)
+            for cell_y in range(y_min, y_max + 1)
+        )
+        self._shape_hit_regions[key] = (False, cells)
+        for cell in cells:
+            self._shape_hit_cells.setdefault(cell, []).append(shape)
+
+    def _remove_shape_hit_region(self, shape):
+        region = self._shape_hit_regions.pop(id(shape), None)
+        if region is None:
+            return
+        is_large, cells = region
+        if is_large:
+            self._shape_hit_large.remove(shape)
+            return
+        for cell in cells:
+            bucket = self._shape_hit_cells[cell]
+            bucket.remove(shape)
+            if not bucket:
+                del self._shape_hit_cells[cell]
+
+    def _forget_shape_from_hit_index(self, shape):
+        if self._shape_hit_index_dirty:
+            return
+        self._remove_shape_hit_region(shape)
+        self._shape_hit_order.pop(id(shape), None)
+
+    @staticmethod
+    def _shape_contains_point(shape, bx, by, pad):
+        x_min, x_max = min(shape.x1, shape.x2), max(shape.x1, shape.x2)
+        y_min, y_max = min(shape.y1, shape.y2), max(shape.y1, shape.y2)
+        eff_pad = max(pad, 6) if shape.shape_type == "line" else pad
+        return (
+            x_min - eff_pad <= bx <= x_max + eff_pad
+            and y_min - eff_pad <= by <= y_max + eff_pad
+        )
 
     def _on_shift(self, pressed):
         """Track Shift key state."""
@@ -3537,6 +3630,8 @@ class KTFigure:
     # -----------------------------------------------------------------------
     def _draw_shape(self, shape: Shape):
         """Draw or redraw a shape on the canvas."""
+        if shape.item_id and not self._shape_hit_index_dirty:
+            self._remove_shape_hit_region(shape)
         if shape.item_id:
             self._cv.delete(shape.item_id)
 
@@ -3580,6 +3675,9 @@ class KTFigure:
                 dash=shape.dash,
                 tags=(f"shape{shape.sid}", "shape"),
             )
+
+        if shape.item_id and not self._shape_hit_index_dirty:
+            self._index_shape(shape)
 
         # If this shape is currently selected, refresh its selection handles so
         # they stay in sync with the new canvas item and remain functional.
@@ -5868,6 +5966,7 @@ class KTFigure:
                     self._blocks.remove(obj)
                 elif isinstance(obj, Shape):
                     if obj.item_id:
+                        self._forget_shape_from_hit_index(obj)
                         self._cv.delete(obj.item_id)
                     self._shapes.remove(obj)
                 elif isinstance(obj, TextObject):
@@ -5904,6 +6003,7 @@ class KTFigure:
             self._save_state()
             s = self._selected_shape
             if s.item_id:
+                self._forget_shape_from_hit_index(s)
                 self._cv.delete(s.item_id)
             self._shapes.remove(s)
             self._selected_shape = None
@@ -6014,6 +6114,7 @@ class KTFigure:
 
     def _redraw_all(self):
         """Redraw all artboards' objects after undo/redo or a full refresh."""
+        self._reset_shape_hit_index()
         # Clear canvas items that are NOT part of the artboard backgrounds.
         for item in self._cv.find_all():
             tags = self._cv.gettags(item)
@@ -6057,6 +6158,7 @@ class KTFigure:
         self._blocks = self._artboards[saved_active]["blocks"]
         self._shapes = self._artboards[saved_active]["shapes"]
         self._texts = self._artboards[saved_active]["texts"]
+        self._reset_shape_hit_index()
 
         if self._show_grid:
             self._draw_grid()
@@ -6118,6 +6220,7 @@ class KTFigure:
         """
         # Clear the entire canvas
         self._cv.delete("all")
+        self._reset_shape_hit_index()
 
         # Reset canvas item IDs so they are re-created below
         for block in self._blocks:
@@ -6428,6 +6531,7 @@ class KTFigure:
                     self._blocks.remove(obj)
                 elif isinstance(obj, Shape):
                     if obj.item_id:
+                        self._forget_shape_from_hit_index(obj)
                         self._cv.delete(obj.item_id)
                     self._shapes.remove(obj)
             count = len(self._selected_objects)
@@ -6454,6 +6558,7 @@ class KTFigure:
             self._save_state()
             s = self._selected_shape
             if s.item_id:
+                self._forget_shape_from_hit_index(s)
                 self._cv.delete(s.item_id)
             self._shapes.remove(s)
             self._selected_shape = None
