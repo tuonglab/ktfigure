@@ -60,6 +60,7 @@ pre code { color: inherit; background: none; padding: 0; }
 .steps { padding-left: 24px; }
 .steps li { padding: 0 0 12px 8px; }
 .steps li::marker { color: var(--teal); font-weight: 800; }
+.step-visual { display: block; width: min(100%, 240px); height: auto; margin: 12px 0 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
 figure { margin: 28px 0; }
 figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px #1a3e2e12; }
 figcaption { margin-top: 10px; font-size: .86rem; color: var(--muted); }
