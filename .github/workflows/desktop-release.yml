@@ -82,9 +82,29 @@ jobs:
             executable="extracted/ktfigure/ktfigure"
           fi
           tests=(--smoke-test --gpu-smoke-test)
-          if [ "${{ matrix.platform }}" = "macos" ]; then
-            echo "::warning::Hosted macOS runners do not provide the accelerated OpenGL context GLFW requires; only GPU imports are checked."
-            tests=(--smoke-test --gpu-import-test)
+          if [ "${{ matrix.platform }}" != "linux" ]; then
+            set +e
+            python -c '
+          import glfw, sys
+          if not glfw.init():
+              sys.exit(42)
+          try:
+              glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+              window = glfw.create_window(64, 64, "OpenGL probe", None, None)
+              if not window:
+                  sys.exit(42)
+              glfw.destroy_window(window)
+          finally:
+              glfw.terminate()
+          '
+            probe_status=$?
+            set -e
+            if [ "$probe_status" -eq 42 ]; then
+              echo "::warning::This runner cannot create an OpenGL context; only GPU imports are checked. Test GPU rendering on a physical machine."
+              tests=(--smoke-test --gpu-import-test)
+            elif [ "$probe_status" -ne 0 ]; then
+              exit "$probe_status"
+            fi
           fi
           for test in "${tests[@]}"; do
             args=("$executable" "$test")

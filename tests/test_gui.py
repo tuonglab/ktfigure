@@ -107,6 +107,21 @@ def test_gpu_preview_validates_selection_and_cancellation():
         root.destroy()
 
 
+def test_gpu_preview_requires_data():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block())
+    try:
+        with patch("ktfigure.messagebox.showwarning") as warn, \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            warn.assert_called_once()
+            launch.assert_not_called()
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
 def test_gpu_preview_reports_spawn_failure_and_removes_data(tmp_path):
     root = tk.Tk()
     root.withdraw()
@@ -121,6 +136,27 @@ def test_gpu_preview_reports_spawn_failure_and_removes_data(tmp_path):
             dialog._gpu_preview()
             assert "cannot launch" in error.call_args.args[1]
             assert not list(tmp_path.iterdir())
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_gpu_preview_cleans_up_if_writing_data_fails(tmp_path):
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    make_temp = tempfile.mkstemp
+    try:
+        with patch("ktfigure.messagebox.askokcancel", return_value=True), \
+             patch("ktfigure.messagebox.showerror") as error, \
+             patch("ktfigure.tempfile.mkstemp",
+                   side_effect=lambda suffix: make_temp(suffix=suffix, dir=tmp_path)), \
+             patch("ktfigure.np.savez", side_effect=OSError("cannot write")), \
+             patch("ktfigure.subprocess.Popen") as launch:
+            dialog._gpu_preview()
+            assert "cannot write" in error.call_args.args[1]
+            assert not list(tmp_path.iterdir())
+            launch.assert_not_called()
     finally:
         dialog.destroy()
         root.destroy()
@@ -176,6 +212,39 @@ def test_large_scatter_thumbnail_samples_without_changing_data():
         assert len(render.call_args.args[0].df) == 20000
         assert len(dialog._df) == 20001
         assert "sampled" in dialog._preview_note.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_thumbnail_sampling_is_cleared_for_other_plot_types():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(
+        pd.DataFrame({"x": range(20001), "y": range(20001)})
+    ))
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax") as render:
+            dialog._update_preview()
+            assert "sampled" in dialog._preview_note.cget("text")
+            dialog._plot_type.set("histogram")
+            dialog._on_type_change()
+        assert len(render.call_args.args[0].df) == 20001
+        assert dialog._preview_note.cget("text") == ""
+        assert str(dialog._cb_y.cget("state")) == "disabled"
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_scatter_thumbnail_reports_render_failure():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.PlotRenderer._render_to_ax", side_effect=ValueError("bad plot")):
+            dialog._update_preview()
+        assert "bad plot" in dialog._preview_lbl.cget("text")
     finally:
         dialog.destroy()
         root.destroy()

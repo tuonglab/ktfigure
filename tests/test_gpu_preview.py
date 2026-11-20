@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import runpy
+import sys
 
 from ktfigure.gpu_preview import prepare_points, run_file, show_preview
 
@@ -31,14 +32,29 @@ def test_prepare_points_rejects_non_numeric_or_empty_data():
         prepare_points(pd.Series([None]), pd.Series([1]))
 
 
+def test_preview_explains_missing_optional_dependencies(monkeypatch):
+    monkeypatch.setitem(sys.modules, "vispy", None)
+    with pytest.raises(RuntimeError, match="requires VisPy and GLFW"):
+        show_preview(np.array([[1.0, 2.0]]), "x", "y", 0)
+
+
+def test_preview_rejects_unrepresentable_numeric_range():
+    pytest.importorskip("vispy")
+    pytest.importorskip("glfw")
+    with np.errstate(over="ignore"), pytest.raises(ValueError, match="too wide"):
+        show_preview(np.array([[-1e308, 0.0], [1e308, 1.0]]), "x", "y", 0)
+
+
 def test_preview_renders_all_points_with_precise_normalization(monkeypatch):
     pytest.importorskip("vispy")
     pytest.importorskip("glfw")
     from vispy import app, scene
+    from vispy.gloo import gl
 
     app.use_app("glfw")
     timer = app.Timer(interval=1, connect=lambda event: app.quit(), start=True)
     original = scene.visuals.Markers.set_data
+    original_get = gl.glGetParameter
     drawn = {}
 
     def capture(self, positions, *args, **kwargs):
@@ -46,6 +62,13 @@ def test_preview_renders_all_points_with_precise_normalization(monkeypatch):
         return original(self, positions, *args, **kwargs)
 
     monkeypatch.setattr(scene.visuals.Markers, "set_data", capture)
+    def renderer_as_bytes(parameter):
+        value = original_get(parameter)
+        if parameter == gl.GL_RENDERER and isinstance(value, str):
+            return value.encode()
+        return value
+
+    monkeypatch.setattr(gl, "glGetParameter", renderer_as_bytes)
     x = 1_000_000_000 + np.arange(1_000_000, dtype=np.float64) / 1_000_000
     points = np.column_stack((x, np.arange(len(x), dtype=np.float64)))
     show_preview(points, "x", "y", 0)
