@@ -49,6 +49,29 @@ figcaption { margin-top: 10px; font-size: .86rem; color: var(--muted); }
 .tips p { margin: 0; color: var(--muted); font-size: .94rem; }
 .end { padding: 28px; background: #eaf5ee; border-radius: 7px; }
 .end p { margin-bottom: 6px; font-weight: 800; font-size: 1.2rem; }
+.figure-map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 28px 0 8px; }
+.figure-map div { min-height: 120px; padding: 14px; border: 1px solid #c9ddd3; background: var(--paper); border-radius: 5px; }
+.figure-map b { display: block; color: var(--teal); font-size: 1.2rem; }
+.figure-map strong, .figure-map span { display: block; line-height: 1.35; }
+.figure-map span, .caption { margin-top: 6px; color: var(--muted); font-size: .86rem; }
+.table-wrap { overflow-x: auto; margin: 24px 0; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; line-height: 1.5; }
+th, td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+thead th { background: var(--paper); }
+tbody th { min-width: 130px; }
+.comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 28px 0; }
+.comparison > div { padding: 18px; border: 1px solid var(--line); border-radius: 6px; }
+.comparison p { margin: 12px 0 0; color: var(--muted); font-size: .9rem; }
+.example-layout { height: 190px; padding: 10px; border: 1px solid var(--line); background: white; }
+.example-layout span { display: block; border: 1px solid #9db8ac; }
+.good { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.good span { padding: 8px; font-size: .8rem; }
+.good b { display: block; color: var(--teal); }
+.poor { display: flex; align-items: flex-start; gap: 3px; overflow: hidden; }
+.poor span { padding: 3px; width: 24%; color: #806600; font-size: .58rem; line-height: 1.1; }
+.poor span:nth-child(2) { margin-top: 38px; width: 36%; color: #a00050; font-size: 1rem; }
+.poor span:nth-child(3) { margin-top: 12px; width: 14%; }
+.poor span:nth-child(4) { margin-top: 85px; font-size: .5rem; }
 footer { border-top: 1px solid var(--line); padding: 25px 5%; color: var(--muted); text-align: center; font-size: .85rem; }
 @media (max-width: 750px) {
   .site-header { align-items: flex-start; flex-direction: column; }
@@ -57,4 +80,6 @@ footer { border-top: 1px solid var(--line); padding: 25px 5%; color: var(--muted
   .layout { display: block; padding-top: 40px; }
   .contents { position: static; margin-bottom: 45px; }
   .tips { grid-template-columns: 1fr; }
+  .figure-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .comparison { grid-template-columns: 1fr; }
 }

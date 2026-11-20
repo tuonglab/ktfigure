@@ -122,6 +122,12 @@ To regenerate the screenshots on Linux, install the package and run:
 xvfb-run -a -s "-screen 0 1600x1000x24" python .github/scripts/generate_tutorial_screenshots.py
 ```
 
+To regenerate the synthetic six-panel showcase illustrations, run:
+
+```bash
+python .github/scripts/generate_showcase_figures.py
+```
+
 ---
 
 ## Contributing
