@@ -6,8 +6,6 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/pages.yml"
-      - ".github/scripts/community_gallery.py"
-      - ".github/scripts/gallery-requirements.txt"
   workflow_dispatch:
 
 permissions:
@@ -28,11 +26,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install -r .github/scripts/gallery-requirements.txt
-      - run: python .github/scripts/community_gallery.py build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

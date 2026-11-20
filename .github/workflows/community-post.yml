@@ -1,0 +1,60 @@
+name: Manage community gallery
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Add or remove a reviewed post
+        type: choice
+        options: [add, remove]
+        required: true
+      post_url:
+        description: Public X or LinkedIn post URL
+        type: string
+        required: true
+      description:
+        description: Optional public description (add only)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: community-gallery-write
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the default branch
+        env:
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/$BASE_BRANCH" ]; then
+            echo "Run this workflow on the default branch." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Update approved posts
+        env:
+          OPERATION: ${{ inputs.operation }}
+          POST_URL: ${{ inputs.post_url }}
+          DESCRIPTION: ${{ inputs.description }}
+        run: python3 .github/scripts/community_posts.py
+      - name: Commit and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/community/entries.json
+          git commit -m "Update community gallery" -m "Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com>"
+          git push origin "HEAD:refs/heads/$BASE_BRANCH"
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH"
