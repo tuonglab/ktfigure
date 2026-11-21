@@ -5,12 +5,16 @@ On Linux, run with a virtual display:
 """
 
 from pathlib import Path
+import time
 import tkinter as tk
 
 import pandas as pd
 from PIL import ImageGrab
 
 from ktfigure import KTFigure, PlotBlock, PlotConfigDialog
+from ktfigure.preview_worker import (
+    PREVIEW_STARTUP_TIMEOUT, PREVIEW_TIMEOUT, PREVIEW_FINISH_TIMEOUT,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +49,12 @@ def main():
     dialog._filename.set("example_data.csv  (16 rows × 4 cols)")
     dialog._nb.select(1)
     dialog._update_preview()
+    deadline = time.monotonic() + PREVIEW_STARTUP_TIMEOUT + PREVIEW_TIMEOUT + PREVIEW_FINISH_TIMEOUT + 5
+    while dialog._preview_job is not None and time.monotonic() < deadline:
+        root.update()
+        time.sleep(0.01)
+    if dialog._preview_photo is None:
+        raise RuntimeError("Screenshot preview failed: " + dialog._preview_lbl.cget("text"))
     capture(dialog, "configure-scatter.png")
     dialog.destroy()
 

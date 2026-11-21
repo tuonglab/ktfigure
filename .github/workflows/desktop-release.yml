@@ -47,7 +47,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/ktfigure-build"
           echo "$RUNNER_TEMP/ktfigure-build/bin" >> "$GITHUB_PATH"
       - name: Install build dependencies
-        run: python -m pip install ".[gpu]" "pyinstaller>=6,<7"
+        run: python -m pip install . "pyinstaller>=6,<7"
       - name: Prepare application icon
         shell: bash
         run: |
@@ -85,7 +85,7 @@ jobs:
             icon_args=(--icon "$APP_ICON")
           fi
           python -m PyInstaller --noconfirm --clean --windowed --name ktfigure \
-            --hidden-import PIL._tkinter_finder --collect-all vispy --collect-all glfw \
+            --hidden-import PIL._tkinter_finder \
             "${icon_args[@]}" \
             --add-data "src/ktfigure/images:ktfigure/images" \
             .github/scripts/desktop_entry.py
@@ -116,46 +116,12 @@ jobs:
             tar -xzf "release/${{ matrix.asset }}" -C extracted
             executable="extracted/ktfigure/ktfigure"
           fi
-          tests=(--smoke-test --gpu-smoke-test)
-          if [ "${{ matrix.platform }}" != "linux" ]; then
-            set +e
-            python -c '
-          import glfw, sys
-          if not glfw.init():
-              sys.exit(42)
-          try:
-              glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-              window = glfw.create_window(64, 64, "OpenGL probe", None, None)
-              if not window:
-                  sys.exit(42)
-              glfw.destroy_window(window)
-          finally:
-              glfw.terminate()
-          '
-            probe_status=$?
-            set -e
-            if [ "$probe_status" -eq 42 ]; then
-              echo "::warning::This runner cannot create an OpenGL context; only GPU imports are checked. Test GPU rendering on a physical machine."
-              tests=(--smoke-test --gpu-import-test)
-            elif [ "$probe_status" -ne 0 ]; then
-              exit "$probe_status"
-            fi
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            runner=(xvfb-run -a)
+          else
+            runner=()
           fi
-          for test in "${tests[@]}"; do
-            args=("$executable" "$test")
-            if [ "$test" = "--gpu-smoke-test" ]; then
-              args+=("gpu-smoke-error.log")
-            fi
-            if [ "${{ matrix.platform }}" = "linux" ]; then
-              runner=(xvfb-run -a)
-            else
-              runner=()
-            fi
-            if ! "${runner[@]}" python -c 'import subprocess, sys; subprocess.run(sys.argv[1:], check=True, timeout=120)' "${args[@]}"; then
-              if [ -f gpu-smoke-error.log ]; then cat gpu-smoke-error.log; fi
-              exit 1
-            fi
-          done
+          "${runner[@]}" python -c 'import subprocess, sys; subprocess.run(sys.argv[1:], check=True, timeout=120)' "$executable" --smoke-test
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}

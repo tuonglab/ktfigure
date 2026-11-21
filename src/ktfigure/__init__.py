@@ -16,9 +16,8 @@ import datetime
 import io
 import math
 import os
-import subprocess
 import sys
-import tempfile
+import time
 
 import matplotlib
 import matplotlib.colors as mcolors
@@ -34,6 +33,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Ellipse, Polygon, Rectangle
 from tkinter import ttk, filedialog, messagebox, colorchooser
+from .preview_worker import PreviewJob
 
 FONTTYPE = 42
 
@@ -799,6 +799,9 @@ class PlotConfigDialog(tk.Toplevel):
         self._filename = tk.StringVar(value="No file loaded")
 
         self._preview_photo = None  # keep PhotoImage alive for preview
+        self._preview_job = None
+        self._preview_after = None
+        self.bind("<Destroy>", self._on_preview_destroy, add="+")
 
         self._build_ui()
         self.update_idletasks()
@@ -946,10 +949,6 @@ class PlotConfigDialog(tk.Toplevel):
         ttk.Button(hdr, text="↺  Refresh", command=self._update_preview).pack(
             side="right"
         )
-        ttk.Button(hdr, text="GPU scatter preview", command=self._gpu_preview).pack(
-            side="right", padx=4
-        )
-
         self._preview_note = ttk.Label(right, text="", foreground="#556", wraplength=350)
         self._preview_note.pack(fill="x")
         self._preview_lbl = tk.Label(
@@ -962,53 +961,6 @@ class PlotConfigDialog(tk.Toplevel):
             wraplength=350,
         )
         self._preview_lbl.pack(fill="both", expand=True)
-
-    def _gpu_preview(self):
-        if self._plot_type.get() != "scatter" or self._df is None:
-            messagebox.showwarning(
-                "GPU preview", "Load data and choose a scatter plot first.", parent=self
-            )
-            return
-        x, y = self._col_x.get(), self._col_y.get()
-        if x not in self._df or y not in self._df:
-            messagebox.showwarning(
-                "GPU preview", "Choose X and Y columns first.", parent=self
-            )
-            return
-        if not messagebox.askokcancel(
-            "GPU scatter preview",
-            "Open a separate interactive preview of the numeric X and Y values? "
-            "It uses normalized axes and a single colour, not the plot's hue, "
-            "size or other styling. It does not change the artboard or export.",
-            parent=self,
-        ):
-            return
-        try:
-            from ktfigure.gpu_preview import prepare_points
-
-            points, dropped = prepare_points(self._df[x], self._df[y])
-            fd, path = tempfile.mkstemp(suffix=".npz")
-            try:
-                with os.fdopen(fd, "wb") as file:
-                    np.savez(file, points=points, x=x, y=y, dropped=dropped)
-                if getattr(sys, "frozen", False):
-                    command = [sys.executable, "--gpu-preview", path]
-                else:
-                    command = [sys.executable, "-m", "ktfigure.gpu_preview", path]
-                process = subprocess.Popen(command)
-            except Exception:
-                os.unlink(path)
-                raise
-
-            def cleanup():
-                if process.poll() is None:
-                    self.master.after(1000, cleanup)
-                elif os.path.exists(path):
-                    os.unlink(path)
-
-            self.master.after(1000, cleanup)
-        except (ValueError, TypeError, OSError) as exc:
-            messagebox.showerror("GPU preview", str(exc), parent=self)
 
     # -------------------------------------------------------------------------
     def _populate_preview(self, df):
@@ -1066,48 +1018,88 @@ class PlotConfigDialog(tk.Toplevel):
     _PREVIEW_DPI = 48  # half normal DPI; adequate for a thumbnail
 
     def _update_preview(self, *_):
-        """Render a low-res thumbnail of the current plot configuration."""
+        """Start a cancellable low-resolution thumbnail render."""
+        self._cancel_preview()
         if self._df is None or not self._col_x.get():
             return
 
-        temp = PlotBlock(0, 0, self._PREVIEW_W, self._PREVIEW_H)
         if self._plot_type.get() == "scatter" and len(self._df) > 20000:
-            temp.df = self._df.sample(n=20000, random_state=0)
             self._preview_note.configure(
                 text="Thumbnail: 20,000 randomly sampled rows. Apply uses all data."
             )
         else:
-            temp.df = self._df
             self._preview_note.configure(text="")
-        temp.plot_type = self._plot_type.get()
-        temp.col_x = self._col_x.get() or None
         col_y = self._col_y.get()
-        temp.col_y = col_y if col_y not in ("", "(none)") else None
         col_hue = self._col_hue.get()
-        temp.col_hue = col_hue if col_hue != "(none)" else None
         col_size = self._col_size.get()
-        temp.col_size = col_size if col_size != "(none)" else None
+        request = {
+            "width": self._PREVIEW_W,
+            "height": self._PREVIEW_H,
+            "dpi": self._PREVIEW_DPI,
+            "df": self._df,
+            "plot_type": self._plot_type.get(),
+            "col_x": self._col_x.get(),
+            "col_y": col_y if col_y not in ("", "(none)") else None,
+            "col_hue": col_hue if col_hue not in ("", "(none)") else None,
+            "col_size": col_size if col_size not in ("", "(none)") else None,
+        }
+        self._preview_photo = None
+        self._preview_lbl.configure(image="", text="Rendering preview…", bg="#cccccc")
+        self._preview_job = PreviewJob(request)
+        self._preview_after = self.after(25, self._poll_preview)
 
+    def _cancel_preview(self):
+        if self._preview_after is not None:
+            self.after_cancel(self._preview_after)
+            self._preview_after = None
+        if self._preview_job is not None:
+            self._preview_job.cancel()
+            self._preview_job = None
+
+    def _on_preview_destroy(self, event):
+        if event.widget is self:
+            self._cancel_preview()
+
+    def _poll_preview(self):
+        self._preview_after = None
+        job = self._preview_job
+        phase, deadline = job.timing
+        if not job.done.is_set() and time.monotonic() < deadline:
+            self._preview_after = self.after(25, self._poll_preview)
+            return
+        if not job.done.is_set():
+            job.cancel()
+            status, value = {
+                "render": "timeout", "startup": "startup_timeout",
+                "finishing": "finish_timeout",
+            }[phase], None
+        else:
+            status, value = job.result or ("error", "Preview worker stopped.")
+        self._preview_job = None
         try:
-            # Render directly at low DPI — far cheaper than full-res then downscale
-            fig = Figure(
-                figsize=(
-                    self._PREVIEW_W / self._PREVIEW_DPI,
-                    self._PREVIEW_H / self._PREVIEW_DPI,
-                ),
-                dpi=self._PREVIEW_DPI,
-            )
-            ax = fig.add_subplot(111)
-            PlotRenderer._render_to_ax(temp, ax, fig)
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", dpi=self._PREVIEW_DPI)
-            plt.close(fig)
-            buf.seek(0)
-            pil_img = Image.open(buf).copy()
-            buf.close()
-            pil_img = pil_img.resize((self._PREVIEW_W, self._PREVIEW_H), Image.BILINEAR)
-            self._preview_photo = ImageTk.PhotoImage(pil_img)
-            self._preview_lbl.configure(image=self._preview_photo, text="")
+            if status == "finish_timeout":
+                self._preview_lbl.configure(
+                    image="", text="Preview worker took too long to finish. Try Refresh.",
+                    bg="#ffe0e0",
+                )
+            elif status == "startup_timeout":
+                self._preview_lbl.configure(
+                    image="", text="Preview worker took too long to start. Try Refresh.",
+                    bg="#ffe0e0",
+                )
+            elif status == "timeout":
+                self._preview_lbl.configure(
+                    image="", text="Preview stopped after 2 seconds. Try a simpler plot or less data. Apply still uses all data.",
+                    bg="#ffe0e0",
+                )
+            elif status == "error":
+                self._preview_lbl.configure(image="", text=f"Preview error:\n{value}", bg="#ffe0e0")
+            else:
+                with Image.open(io.BytesIO(value)) as image:
+                    pil_img = image.copy()
+                pil_img = pil_img.resize((self._PREVIEW_W, self._PREVIEW_H), Image.BILINEAR)
+                self._preview_photo = ImageTk.PhotoImage(pil_img)
+                self._preview_lbl.configure(image=self._preview_photo, text="", bg="#cccccc")
         except Exception as exc:
             self._preview_lbl.configure(
                 image="", text=f"Preview error:\n{exc}", bg="#ffe0e0"
@@ -2207,7 +2199,7 @@ class AestheticsPanel(ttk.Frame):
 # ---------------------------------------------------------------------------
 class PlotRenderer:
     @staticmethod
-    def _render_to_ax(block: "PlotBlock", ax, fig):
+    def _render_to_ax(block: "PlotBlock", ax, fig, raise_errors=False):
         """Draw block's plot onto *ax*.  Handles all seaborn plot types."""
         a = block.aesthetics
         df = block.df
@@ -2368,6 +2360,8 @@ class PlotRenderer:
                     transform=ax.transAxes,
                 )
         except Exception as exc:
+            if raise_errors:
+                raise
             ax.clear()
             ax.text(
                 0.5,

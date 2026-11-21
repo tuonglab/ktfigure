@@ -7,6 +7,7 @@ Tests for data-model classes and pure utility functions:
   - PLOT_TYPES / constants
 """
 import copy
+import runpy
 import pytest
 
 from ktfigure import (
@@ -27,6 +28,13 @@ from ktfigure import (
     default_aesthetics,
 )
 import ktfigure as ktf
+
+
+def test_python_module_launches_main(monkeypatch):
+    calls = []
+    monkeypatch.setattr("ktfigure.main", lambda: calls.append(True))
+    runpy.run_module("ktfigure", run_name="__main__")
+    assert calls == [True]
 
 
 # ---------------------------------------------------------------------------
