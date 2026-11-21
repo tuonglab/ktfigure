@@ -99,29 +99,32 @@ SEABORN_STYLES = ["whitegrid", "darkgrid", "white", "dark", "ticks"]
 # Themes
 # ---------------------------------------------------------------------------
 THEME_LIGHT = {
-    "tb": "#f8fafc",
-    "btn": "#f1f5f9",
-    "btn_fg": "#334155",
-    "btn_hover": "#e2e8f0",
-    "btn_press": "#cbd5e1",
-    "sep": "#e2e8f0",
-    "canvas": "#525252",
-    "accent": "#3b82f6",
-    "status_fg": "#334155",
+    "tb": "#f8faf8",
+    "btn": "#eaf5ee",
+    "btn_fg": "#172d35",
+    "btn_hover": "#dcece3",
+    "btn_press": "#c9ddd3",
+    "sep": "#dce8e2",
+    "canvas": "#536a70",
+    "accent": "#167465",
+    "status_fg": "#536a70",
     "panel_bg": "#ffffff",
+    "field": "#ffffff",
 }
 THEME_DARK = {
-    "tb": "#2d2d2d",
-    "btn": "#3c3c3c",
-    "btn_fg": "#cccccc",
-    "btn_hover": "#505050",
-    "btn_press": "#3a3a3a",
-    "sep": "#555555",
-    "canvas": "#3c3c3c",
-    "accent": "#4fc3f7",
-    "status_fg": "#cccccc",
-    "panel_bg": "#252526",
+    "tb": "#172d35",
+    "btn": "#29454b",
+    "btn_fg": "#e4f1eb",
+    "btn_hover": "#365a5c",
+    "btn_press": "#416a68",
+    "sep": "#365357",
+    "canvas": "#263d41",
+    "accent": "#8bd5bb",
+    "status_fg": "#c1d5cd",
+    "panel_bg": "#1d3539",
+    "field": "#29454b",
 }
+ACTIVE_COLOR = "#167465"
 SEABORN_PALETTES = [
     "deep",
     "muted",
@@ -250,11 +253,11 @@ class StyledButton(tk.Frame):
         parent,
         text,
         command=None,
-        bg="#f1f5f9",
-        fg="#1e293b",
-        hover_bg="#e2e8f0",
-        press_bg="#cbd5e1",
-        canvas_bg="#f8fafc",  # ignored – kept for API compat
+        bg=THEME_LIGHT["btn"],
+        fg=THEME_LIGHT["btn_fg"],
+        hover_bg=THEME_LIGHT["btn_hover"],
+        press_bg=THEME_LIGHT["btn_press"],
+        canvas_bg=THEME_LIGHT["tb"],  # ignored – kept for API compat
         padx=13,
         pady=7,
         font=("", 9),
@@ -293,7 +296,7 @@ class StyledButton(tk.Frame):
             widget.bind("<Leave>", lambda _e: self._on_leave())
             widget.bind(
                 "<Button-1>",
-                lambda _e: self._set_bg(press_bg) if not self._is_active else None,
+                lambda _e: self._set_bg(self._press_bg) if not self._is_active else None,
             )
             widget.bind("<ButtonRelease-1>", self._on_release)
 
@@ -305,7 +308,7 @@ class StyledButton(tk.Frame):
     def _on_leave(self):
         """Leave: restore appropriate bg based on active state."""
         if self._is_active:
-            self._set_bg("#3b82f6")  # Keep blue when active
+            self._set_bg(ACTIVE_COLOR)
         else:
             self._set_bg(self._bg)
 
@@ -330,11 +333,13 @@ class ThemeToggle(tk.Canvas):
     H = 28  # total height (px)
     PAD = 3  # padding inside track around the knob
 
-    TRACK_ON = "#3b82f6"  # accent blue  – dark mode active
-    TRACK_OFF = "#94a3b8"  # slate grey   – light mode
+    TRACK_ON = ACTIVE_COLOR
+    TRACK_OFF = "#9db8ac"
     KNOB = "#ffffff"
 
-    def __init__(self, parent, command=None, is_on=False, bg="#f8fafc", **kwargs):
+    def __init__(
+        self, parent, command=None, is_on=False, bg=THEME_LIGHT["tb"], **kwargs
+    ):
         super().__init__(
             parent,
             width=self.W,
@@ -2433,7 +2438,7 @@ class KTFigure:
         self._mode_select()  # Set default mode to select
         # Snap is on by default – reflect that in the button visual state
         self._btn_snap._is_active = True
-        self._btn_snap._set_bg("#3b82f6")
+        self._btn_snap._set_bg(ACTIVE_COLOR)
         self._btn_snap._lbl.configure(fg="white")
         self._draw_artboard()
         self._save_state()  # Initial state
@@ -2509,30 +2514,30 @@ class KTFigure:
             tb1,
             "💾  PNG",
             self._export_png,
-            bg="#dcfce7",
-            fg="#166534",
-            hover_bg="#bbf7d0",
-            press_bg="#86efac",
+            bg="#eaf5ee",
+            fg="#11695c",
+            hover_bg="#dcece3",
+            press_bg="#c9ddd3",
             _themed=False,
         )
         tbtn(
             tb1,
             "📄  PDF",
             self._export_pdf,
-            bg="#dbeafe",
-            fg="#1e40af",
-            hover_bg="#bfdbfe",
-            press_bg="#93c5fd",
+            bg="#eaf5ee",
+            fg="#11695c",
+            hover_bg="#dcece3",
+            press_bg="#c9ddd3",
             _themed=False,
         )
         tbtn(
             tb1,
             "📐  SVG",
             self._export_svg,
-            bg="#fef3c7",
-            fg="#92400e",
-            hover_bg="#fde68a",
-            press_bg="#fcd34d",
+            bg="#eaf5ee",
+            fg="#11695c",
+            hover_bg="#dcece3",
+            press_bg="#c9ddd3",
             _themed=False,
         )
         tbtn(tb1, "❓  Help", self._show_help)
@@ -2854,8 +2859,8 @@ class KTFigure:
             bd=1,
             relief="solid",
             bg="white",
-            fg="#1e293b",
-            activebackground="#e2e8f0",
+            fg=TC["btn_fg"],
+            activebackground=TC["btn_hover"],
             font=("", 9),
             cursor="arrow",
             command=self._show_board_menu,
@@ -2911,8 +2916,8 @@ class KTFigure:
                 outline="",
                 tags="bg",
             )
-            # white sheet — active board gets blue border
-            border_color = "#3b82f6" if is_active else "#bbb"
+            # white sheet — active board gets an accent border
+            border_color = ACTIVE_COLOR if is_active else "#bbb"
             border_width = 2 if is_active else 1
             self._cv.create_rectangle(
                 ox,
@@ -3086,7 +3091,7 @@ class KTFigure:
         if self._show_grid:
             self._draw_grid()
             self._btn_grid._is_active = True
-            self._btn_grid._set_bg("#3b82f6")
+            self._btn_grid._set_bg(ACTIVE_COLOR)
             self._btn_grid._lbl.configure(fg="white")
             self._set_status("Grid visible. Drag objects to snap to grid lines.")
         else:
@@ -3102,7 +3107,7 @@ class KTFigure:
         TC = THEME_DARK if self._is_dark else THEME_LIGHT
         if self._snap_to_grid:
             self._btn_snap._is_active = True
-            self._btn_snap._set_bg("#3b82f6")
+            self._btn_snap._set_bg(ACTIVE_COLOR)
             self._btn_snap._lbl.configure(fg="white")
             self._set_status("Snap to grid ON.")
         else:
@@ -3388,7 +3393,7 @@ class KTFigure:
             font=("", 9),
             bg=TC["btn"],
             fg=TC["btn_fg"],
-            activebackground="#3b82f6",
+            activebackground=ACTIVE_COLOR,
             activeforeground="white",
         )
         for i in range(n):
@@ -4110,17 +4115,16 @@ class KTFigure:
         ]
         for btn in mode_buttons:
             if btn == active_btn:
-                # Highlight active button with blue background and white text
-                btn._bg = "#3b82f6"
-                btn._hover_bg = "#2563eb"
-                btn._press_bg = "#1d4ed8"
+                btn._bg = ACTIVE_COLOR
+                btn._hover_bg = "#11695c"
+                btn._press_bg = "#0a463e"
                 btn._is_active = True
                 btn.configure(
-                    bg="#3b82f6",
-                    highlightbackground="#3b82f6",
-                    highlightcolor="#3b82f6",
+                    bg=ACTIVE_COLOR,
+                    highlightbackground=ACTIVE_COLOR,
+                    highlightcolor=ACTIVE_COLOR,
                 )
-                btn._lbl.configure(bg="#3b82f6", fg="white")
+                btn._lbl.configure(bg=ACTIVE_COLOR, fg="white")
             else:
                 # Reset to default appearance using current theme colors
                 TC = THEME_DARK if self._is_dark else THEME_LIGHT
@@ -4204,7 +4208,7 @@ class KTFigure:
         )
         # _board_btn is a plain tk.Button styled to look like a combobox
         self._board_btn.configure(
-            bg="white" if not self._is_dark else "#3c3c3c",
+            bg=TC["field"],
             fg=TC["btn_fg"],
             activebackground=TC["btn_hover"],
         )
@@ -4220,54 +4224,44 @@ class KTFigure:
 
         # ttk theme for panels
         style = ttk.Style()
-        if self._is_dark:
-            style.theme_use("clam")
-            style.configure(".", background=TC["panel_bg"], foreground=TC["btn_fg"])
-            style.configure("TFrame", background=TC["panel_bg"])
+        style.theme_use("clam")
+        style.configure(
+            ".", background=TC["panel_bg"], foreground=TC["btn_fg"],
+            bordercolor=TC["sep"],
+        )
+        style.configure("TFrame", background=TC["panel_bg"])
+        style.configure("TLabel", background=TC["panel_bg"], foreground=TC["btn_fg"])
+        for widget_style in ("TEntry", "TCombobox", "TSpinbox"):
             style.configure(
-                "TLabel", background=TC["panel_bg"], foreground=TC["btn_fg"]
+                widget_style, fieldbackground=TC["field"], foreground=TC["btn_fg"]
             )
-            style.configure(
-                "TEntry", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
-            )
-            style.configure(
-                "TCombobox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
-            )
-            style.configure(
-                "TSpinbox", fieldbackground="#3c3c3c", foreground=TC["btn_fg"]
-            )
-            style.configure(
-                "TCheckbutton", background=TC["panel_bg"], foreground=TC["btn_fg"]
-            )
-            style.configure("TButton", background=TC["btn"], foreground=TC["btn_fg"])
-            style.configure("TPanedwindow", background=TC["canvas"])
-            style.configure("Horizontal.TScrollbar", background=TC["btn"])
-            style.configure("Vertical.TScrollbar", background=TC["btn"])
-            style.configure("TNotebook", background=TC["panel_bg"])
-            style.configure(
-                "TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"]
-            )
-            style.map("TNotebook.Tab", background=[("selected", "#505050")])
-        else:
-            style.theme_use("clam")
-            style.configure(".", background=TC["panel_bg"], foreground="#1e293b")
-            style.configure("TFrame", background=TC["panel_bg"])
-            style.configure("TLabel", background=TC["panel_bg"], foreground="#1e293b")
-            style.configure("TEntry", fieldbackground="#ffffff", foreground="#1e293b")
-            style.configure(
-                "TCombobox", fieldbackground="#ffffff", foreground="#1e293b"
-            )
-            style.configure("TSpinbox", fieldbackground="#ffffff", foreground="#1e293b")
-            style.configure(
-                "TCheckbutton", background=TC["panel_bg"], foreground="#1e293b"
-            )
-            style.configure("TButton", background="#e2e8f0", foreground="#1e293b")
-            style.configure("TPanedwindow", background=TC["canvas"])
-            style.configure("Horizontal.TScrollbar", background="#cbd5e1")
-            style.configure("Vertical.TScrollbar", background="#cbd5e1")
-            style.configure("TNotebook", background="#f1f5f9")
-            style.configure("TNotebook.Tab", background="#e2e8f0", foreground="#1e293b")
-            style.map("TNotebook.Tab", background=[("selected", "#ffffff")])
+        style.map("TCombobox", fieldbackground=[("readonly", TC["field"])])
+        style.configure(
+            "TCheckbutton", background=TC["panel_bg"], foreground=TC["btn_fg"]
+        )
+        style.configure("TButton", background=TC["btn"], foreground=TC["btn_fg"])
+        style.map(
+            "TButton",
+            background=[("pressed", TC["btn_press"]), ("active", TC["btn_hover"])],
+        )
+        style.configure("TPanedwindow", background=TC["canvas"])
+        style.configure("TSeparator", background=TC["sep"])
+        style.configure("Horizontal.TScrollbar", background=TC["btn"])
+        style.configure("Vertical.TScrollbar", background=TC["btn"])
+        style.configure("TNotebook", background=TC["panel_bg"])
+        style.configure("TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"])
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", TC["panel_bg"])],
+            foreground=[("selected", TC["accent"])],
+        )
+        style.configure(
+            "Treeview", background=TC["field"],
+            fieldbackground=TC["field"], foreground=TC["btn_fg"],
+        )
+        style.configure(
+            "Treeview.Heading", background=TC["btn"], foreground=TC["btn_fg"]
+        )
 
         # Update theme toggle switch visual state and background
         self._theme_toggle.set_state(self._is_dark)
@@ -4295,7 +4289,7 @@ class KTFigure:
         # Keep grid/snap buttons in sync with current toggle state.
         # Always update internal resting/hover/press colours so that mouse
         # leave/hover work correctly after a theme switch, regardless of
-        # whether the button is currently active (blue).
+        # whether the button is currently active.
         self._btn_grid._bg = TC["btn"]
         self._btn_grid._hover_bg = TC["btn_hover"]
         self._btn_grid._press_bg = TC["btn_press"]
@@ -7092,12 +7086,12 @@ def main():
             style.theme_use(t)
             break
 
-    BG = "#ffffff"
-    FG = "#1e293b"
-    MID = "#f1f5f9"
-    ACC = "#3b82f6"
-    BORDER = "#e2e8f0"
-    MUTED = "#64748b"
+    BG = THEME_LIGHT["panel_bg"]
+    FG = THEME_LIGHT["btn_fg"]
+    MID = THEME_LIGHT["btn"]
+    ACC = ACTIVE_COLOR
+    BORDER = THEME_LIGHT["sep"]
+    MUTED = THEME_LIGHT["status_fg"]
 
     style.configure(
         ".", background=BG, foreground=FG, font=("", 10), bordercolor=BORDER
@@ -7113,7 +7107,7 @@ def main():
         relief="flat",
         borderwidth=0,
     )
-    style.map("TButton", background=[("active", "#2563eb"), ("pressed", "#1d4ed8")])
+    style.map("TButton", background=[("active", "#11695c"), ("pressed", "#0a463e")])
     style.configure(
         "TEntry",
         fieldbackground=MID,

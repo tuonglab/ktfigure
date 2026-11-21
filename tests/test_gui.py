@@ -1167,6 +1167,21 @@ class TestTheme:
         self.app._on_theme_click()
         assert self.app._theme_manual_override is True
 
+    def test_theme_updates_fields_and_active_controls(self):
+        from tkinter import ttk
+        from ktfigure import ACTIVE_COLOR, THEME_DARK, THEME_LIGHT
+
+        for dark, colors in ((True, THEME_DARK), (False, THEME_LIGHT)):
+            self.app._is_dark = dark
+            self.app._apply_theme()
+            style = ttk.Style(self.root)
+            assert style.lookup("TCombobox", "fieldbackground", ("readonly",)) == colors["field"]
+            assert style.lookup("Treeview", "foreground") == colors["btn_fg"]
+            assert self.app._btn_select._lbl.cget("bg") == ACTIVE_COLOR
+            assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
+            self.app._btn_snap._on_leave()
+            assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
+
 
 # ---------------------------------------------------------------------------
 # KTFigure — status bar

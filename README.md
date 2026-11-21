@@ -151,6 +151,10 @@ workflow deploys changes to `docs/` pushed to `master`; it can also be run
 manually from the Actions tab. Repository administrators may need to enable
 Pages and approve the `github-pages` environment.
 
+The tutorial follows your device's light or dark appearance by default. Use
+the Day mode / Night mode button in the navigation to save a preference for
+the tutorial in your browser.
+
 To regenerate the screenshots on Linux, install the package and run:
 
 ```bash
