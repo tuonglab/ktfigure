@@ -319,10 +319,10 @@ def test_cancel_during_worker_startup():
 def test_finishing_watchdog_kills_hung_worker():
     code = (
         "import sys, time, struct\n"
-        f"sys.stdout.buffer.write({ _READY!r }); sys.stdout.buffer.flush()\n"
+        f"sys.stdout.buffer.write({_READY!r}); sys.stdout.buffer.flush()\n"
         "sys.stdin.buffer.read()\n"
-        f"sys.stdout.buffer.write({ _RENDERING!r } + struct.pack('!d', time.monotonic()))\n"
-        f"sys.stdout.buffer.write({ _FINISHED!r } + struct.pack('!d', time.monotonic()))\n"
+        f"sys.stdout.buffer.write({_RENDERING!r} + struct.pack('!d', time.monotonic()))\n"
+        f"sys.stdout.buffer.write({_FINISHED!r} + struct.pack('!d', time.monotonic()))\n"
         "sys.stdout.buffer.flush()\n"
         "time.sleep(30)\n"
     )
