@@ -72,6 +72,60 @@ test("reduced motion switches immediately without animating", () => {
   assert.equal(p.button["aria-checked"], "true");
 });
 
+test("mobile fades the theme without the SVG wave, in both directions", async () => {
+  for (const saved of ["light", "dark"]) {
+    const listeners = {};
+    const animations = [];
+    const label = {};
+    const button = {
+      animate() {}, querySelector: () => label, setAttribute() {},
+      addEventListener(name, callback) { listeners[name] = callback; },
+    };
+    const overlay = {
+      style: {}, setAttribute() {}, remove() { this.removed = true; },
+      animate(frames, options) {
+        let resolve;
+        const finished = new Promise((done) => { resolve = done; });
+        animations.push({ frames, options, resolve });
+        return { finished };
+      },
+    };
+    const document = {
+      documentElement: { dataset: {} }, body: { appendChild() {} },
+      querySelector: () => button,
+      addEventListener(name, callback) { listeners[name] = callback; },
+      createElement: () => overlay,
+      createElementNS() { throw Error("mobile should not create an SVG wave"); },
+      startViewTransition() { throw Error("mobile should not use a view transition"); },
+    };
+    runInNewContext(source, {
+      document, localStorage: { getItem: () => saved, setItem() {} },
+      getComputedStyle: () => ({ getPropertyValue: () => "#fff" }),
+      window: { matchMedia: (query) => ({
+        matches: query === "(max-width: 750px)", addEventListener() {},
+      }) },
+      console,
+    });
+    listeners.DOMContentLoaded();
+    listeners.click();
+    assert.equal(button.disabled, true);
+    assert.equal(document.documentElement.dataset.theme, saved);
+    assert.equal(overlay.className, "theme-fade-overlay");
+    assert.equal(overlay.style.background, "#fff");
+    assert.equal(animations[0].frames[0].opacity, 0);
+    assert.equal(animations[0].frames[1].opacity, 1);
+    animations[0].resolve();
+    await Promise.resolve();
+    assert.equal(document.documentElement.dataset.theme, saved === "light" ? "dark" : "light");
+    assert.equal(animations[1].frames[0].opacity, 1);
+    assert.equal(animations[1].frames[1].opacity, 0);
+    animations[1].resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(button.disabled, false);
+    assert.equal(overlay.removed, true);
+  }
+});
+
 test("view transition uses one softened wave", async () => {
   const listeners = {};
   const animations = [];
