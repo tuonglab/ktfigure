@@ -5,6 +5,7 @@ On Linux, run with a virtual display:
 """
 
 from pathlib import Path
+import time
 import tkinter as tk
 
 import pandas as pd
@@ -45,6 +46,12 @@ def main():
     dialog._filename.set("example_data.csv  (16 rows × 4 cols)")
     dialog._nb.select(1)
     dialog._update_preview()
+    deadline = time.monotonic() + 5
+    while dialog._preview_job is not None and time.monotonic() < deadline:
+        root.update()
+        time.sleep(0.01)
+    if dialog._preview_photo is None:
+        raise RuntimeError("Screenshot preview failed: " + dialog._preview_lbl.cget("text"))
     capture(dialog, "configure-scatter.png")
     dialog.destroy()
 

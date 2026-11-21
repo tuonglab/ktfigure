@@ -64,7 +64,6 @@ pip install .</code></pre>
       <div class="note">
         <strong>Need Tkinter?</strong> On Ubuntu/Debian, run <code>sudo apt-get install python3-tk</code>; on Fedora, run <code>sudo dnf install python3-tkinter</code>. On macOS and Windows, Tkinter is included with the standard <a href="https://www.python.org/downloads/">python.org installer</a>.
       </div>
-      <p>To add the optional GPU preview to a source installation, run <code>pip install ".[gpu]"</code> from the cloned repository. Desktop downloads include it.</p>
       <a class="button button-secondary" href="#quick-start">Continue to Quick Start <span aria-hidden="true">↓</span></a>
     </section>
     <section class="home-content home-guide" id="quick-start" aria-labelledby="quick-start-title">
@@ -77,7 +76,7 @@ pip install .</code></pre>
         <li>Choose <strong>scatter</strong>, map <code>temperature</code> to X, <code>sales</code> to Y and <code>season</code> to Hue, then click <strong>Apply</strong>.</li>
         <li>Select the plot to adjust its properties, then choose <strong>PDF</strong>, <strong>SVG</strong> or <strong>PNG</strong> to export. Review the <a href="getting-started.html#layout-export">export notes</a> before publishing.</li>
       </ol>
-      <div class="note"><strong>Large scatterplots:</strong> In the plot configuration dialog, use <strong>GPU scatter preview</strong> to explore numeric X and Y in a separate window. Drag to pan or scroll to zoom. Axes are normalized, with the original ranges above the plot. The preview uses one colour and ignores size and other styling. Non-finite pairs are omitted and counted. The artboard and exports use all data and CPU rendering. OpenGL may use software rendering if a GPU is unavailable.</div>
+      <div class="note"><strong>Plot previews:</strong> The configuration thumbnail stops rendering after two seconds if it takes too long; you can still apply the plot. For scatterplots with more than 20,000 rows, the thumbnail samples 20,000 rows. The plot on the artboard and exports use all data.</div>
       <a class="button" href="#learn-title">Explore the tutorials <span aria-hidden="true">↓</span></a>
     </section>
     <section class="home-content" aria-labelledby="learn-title">

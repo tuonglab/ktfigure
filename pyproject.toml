@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktfigure"
-version = "1.0.4"
+version = "1.0.5"
 description = "A GUI tool for researchers to create seaborn/matplotlib plots without any coding knowledge"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,10 +39,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = [
-    "vispy>=0.15,<0.17",
-    "glfw>=2.7,<3",
-]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
