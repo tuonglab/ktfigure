@@ -959,13 +959,11 @@ class TestOpenConfigResult:
     def test_open_config_result_false_no_render(self):
         """If dialog is closed without applying, block should not be rendered."""
         b = PlotBlock(50, 50, 300, 300)
-        self.app._blocks.append(b)
-        self.app._draw_empty_block(b)
-
         # Patch wait_window so it returns immediately (dlg.result stays False)
         with patch.object(self.root, 'wait_window'):
             self.app._open_config(b, is_edit=False)
-        # No render called → image_id stays None
+        assert b not in self.app._blocks
+        assert not self.app._cv.find_withtag(f"blk{b.bid}")
         assert b.image_id is None
 
     def test_open_config_result_true_renders(self):
