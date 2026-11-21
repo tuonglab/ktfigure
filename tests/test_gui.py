@@ -1183,7 +1183,7 @@ class TestTheme:
 
     def test_theme_updates_fields_and_active_controls(self):
         from tkinter import ttk
-        from ktfigure import ACTIVE_COLOR, THEME_DARK, THEME_LIGHT
+        from ktfigure import THEME_DARK, THEME_LIGHT
 
         for dark, colors in ((True, THEME_DARK), (False, THEME_LIGHT)):
             self.app._is_dark = dark
@@ -1191,10 +1191,32 @@ class TestTheme:
             style = ttk.Style(self.root)
             assert style.lookup("TCombobox", "fieldbackground", ("readonly",)) == colors["field"]
             assert style.lookup("Treeview", "foreground") == colors["btn_fg"]
-            assert self.app._btn_select._lbl.cget("bg") == ACTIVE_COLOR
-            assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
+            assert self.app._btn_select._lbl.cget("bg") == colors["active"]
+            assert self.app._btn_snap._lbl.cget("bg") == colors["active"]
             self.app._btn_snap._on_leave()
-            assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
+            assert self.app._btn_snap._lbl.cget("bg") == colors["active"]
+
+    def test_artboards_and_grid_follow_theme_across_pages(self):
+        from ktfigure import THEME_DARK, THEME_LIGHT
+
+        self.app._add_artboard()
+        self.app._grid_size = 20
+        self.app._toggle_grid_visible()
+        for dark, colors in ((True, THEME_DARK), (False, THEME_LIGHT)):
+            self.app._is_dark = dark
+            self.app._apply_theme()
+            boards = self.app._cv.find_withtag("artboard")
+            assert len(boards) == 2
+            assert all(self.app._cv.itemcget(board, "fill") == colors["paper"] for board in boards)
+            assert self.app._cv.itemcget(boards[1], "outline") == colors["board_outline"]
+            assert self.app._cv.itemcget(boards[0], "outline") == colors["board_other"]
+            for weight, color in zip(("minor", "medium", "major"), colors["grid"]):
+                lines = self.app._cv.find_withtag(f"grid_{weight}")
+                assert lines
+                assert self.app._cv.itemcget(lines[0], "fill") == color
+            self.app._cv.delete("bg", "artboard", "ruler")
+            self.app._draw_artboard()
+            assert self.app._cv.itemcget(self.app._cv.find_withtag("artboard")[1], "fill") == colors["paper"]
 
     def test_compact_toolbar_and_draggable_scrollbar(self):
         from tkinter import ttk
@@ -1372,6 +1394,25 @@ class TestExport:
         with patch("ktfigure.filedialog.asksaveasfilename", return_value=out):
             self.app._export_png()
         assert os.path.exists(out)
+
+    def test_night_artboard_and_png_background_are_white(self, tmp_path, sample_df):
+        from PIL import Image
+
+        self.app._is_dark = True
+        self.app._apply_theme()
+        board = self.app._cv.find_withtag("artboard")[0]
+        assert self.app._cv.itemcget(board, "fill") == "#ffffff"
+        block = PlotBlock(0, 0, DPI * 3, DPI * 2)
+        block.df = sample_df
+        block.plot_type = "scatter"
+        block.col_x, block.col_y = "x", "y"
+        self.app._blocks.append(block)
+        self.app._render_block(block)
+        out = str(tmp_path / "night.png")
+        with patch("ktfigure.filedialog.asksaveasfilename", return_value=out):
+            self.app._export_png()
+        with Image.open(out) as image:
+            assert image.convert("RGB").getpixel((A4_W - 1, A4_H - 1)) == (255, 255, 255)
 
     def test_export_pdf_with_block(self, tmp_path, sample_df):
         b = PlotBlock(0, 0, DPI * 3, DPI * 2)

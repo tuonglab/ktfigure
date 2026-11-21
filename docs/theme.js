@@ -20,16 +20,31 @@
   }
 
   function tiles(createTile) {
-    const size = 36;
-    const columns = Math.ceil(window.innerWidth / size);
-    const rows = Math.ceil(window.innerHeight / size);
+    const scale = Math.max(1, Math.sqrt(window.innerWidth * window.innerHeight / 2073600));
+    const widths = [19, 26, 22, 29, 21, 25, 18, 27, 23];
+    function segments(limit, offset) {
+      const result = [];
+      let position = 0;
+      while (position < limit) {
+        const size = Math.round(widths[(result.length + offset) % widths.length] * scale);
+        result.push({ position, size });
+        position += size;
+      }
+      return result;
+    }
+    const columns = segments(window.innerWidth, 0);
+    const rows = segments(window.innerHeight, 4);
     const result = [];
-    for (let row = 0; row < rows; row++) {
-      for (let column = 0; column < columns; column++) {
-        const delay = 540 * column / Math.max(columns - 1, 1)
-          + 110 * row / Math.max(rows - 1, 1)
-          + ((column * 7 + row * 11) % 7) * 9;
-        result.push({ element: createTile(column, row, size), delay });
+    for (let row = 0; row < rows.length; row++) {
+      for (let column = 0; column < columns.length; column++) {
+        const x = columns[column].position;
+        const y = rows[row].position;
+        const delay = 650 * x / window.innerWidth + 100 * y / window.innerHeight
+          + ((column * 7 + row * 11) % 7) * 8;
+        result.push({
+          element: createTile(x, y, columns[column].size, rows[row].size),
+          delay,
+        });
       }
     }
     return result;
@@ -37,8 +52,11 @@
 
   function animateTiles(items, from, to) {
     return items.map(({ element, delay }) => element.animate(
-      [{ transform: `scaleY(${from})` }, { transform: `scaleY(${to})` }],
-      { duration: 220, delay, easing: "ease-in-out", fill: "forwards" },
+      [
+        { transform: `scaleY(${from})`, opacity: from },
+        { transform: `scaleY(${to})`, opacity: to },
+      ],
+      { duration: 320, delay, easing: "ease-in-out", fill: "forwards" },
     ));
   }
 
@@ -54,19 +72,23 @@
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.classList.add("theme-wave-mask");
       svg.setAttribute("aria-hidden", "true");
-      const clip = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+      const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
       clip.id = "theme-wave-clip";
-      clip.setAttribute("clipPathUnits", "userSpaceOnUse");
+      clip.setAttribute("maskUnits", "userSpaceOnUse");
+      clip.setAttribute("width", window.innerWidth);
+      clip.setAttribute("height", window.innerHeight);
       svg.appendChild(clip);
-      const items = tiles((column, row, size) => {
+      const items = tiles((x, y, width, height) => {
         const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("x", column * size);
-        rect.setAttribute("y", row * size);
-        rect.setAttribute("width", size + 1);
-        rect.setAttribute("height", size + 1);
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", width + 1);
+        rect.setAttribute("height", height + 1);
+        rect.setAttribute("fill", "white");
         rect.style.transformBox = "fill-box";
         rect.style.transformOrigin = "top";
         rect.style.transform = "scaleY(0)";
+        rect.style.opacity = "0";
         clip.appendChild(rect);
         return rect;
       });
@@ -92,12 +114,13 @@
     const overlay = document.createElement("div");
     overlay.className = "theme-wave-overlay";
     overlay.setAttribute("aria-hidden", "true");
-    overlay.style.gridTemplateColumns = `repeat(${Math.ceil(window.innerWidth / 36)}, 1fr)`;
-    overlay.style.gridTemplateRows = `repeat(${Math.ceil(window.innerHeight / 36)}, 1fr)`;
     overlay.style.setProperty("--wave-color", getComputedStyle(document.documentElement).getPropertyValue("--ink"));
-    const items = tiles(() => {
+    const items = tiles((x, y, width, height) => {
       const tile = document.createElement("span");
       tile.className = "theme-wave-tile";
+      Object.assign(tile.style, {
+        left: `${x}px`, top: `${y}px`, width: `${width + 1}px`, height: `${height + 1}px`,
+      });
       overlay.appendChild(tile);
       return tile;
     });

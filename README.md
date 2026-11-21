@@ -101,7 +101,7 @@ python -m ktfigure
 ### 2. Create a plot
 
 1. In the toolbar, click **Plot** mode.
-2. Click and drag on the white artboard to define the plot region.
+2. Click and drag on the artboard to define the plot region.
 3. A configuration dialog will open — go to the **Data** tab and load a CSV or TSV file.
 4. Switch to the **Plot** tab, select your plot type, and map your data columns to X, Y, and (optionally) Hue.
 5. Click **Apply** to render the plot on the canvas.

@@ -55,7 +55,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 A4_W = 794  # A4 width  at 96 DPI  (210 mm → 8.27 in → 794 px)
 A4_H = 1123  # A4 height at 96 DPI  (297 mm → 11.69 in → 1123 px)
-BOARD_PAD = 60  # grey padding around the white artboard
+BOARD_PAD = 60  # padding around the artboard
 BOARD_GAP = round(0.5 * 96 / 2.54)  # ~19 px gap between side-by-side artboards (0.5 cm)
 DPI = 96
 GRID_SIZE = 20  # pixels between grid lines (used for snap-to-grid)
@@ -100,14 +100,19 @@ SEABORN_STYLES = ["whitegrid", "darkgrid", "white", "dark", "ticks"]
 # Themes
 # ---------------------------------------------------------------------------
 THEME_LIGHT = {
-    "tb": "#faf9f7",
-    "btn": "#ffffff",
+    "tb": "#ffffff",
+    "btn": "#fafafa",
     "btn_fg": "#172d35",
     "btn_hover": "#eaf5ee",
     "btn_press": "#dcece3",
     "sep": "#e4e3df",
-    "canvas": "#f8f8f6",
+    "canvas": "#ffffff",
     "accent": "#167465",
+    "active": "#293638",
+    "paper": "#ffffff",
+    "board_outline": "#364245",
+    "board_other": "#b6b9b6",
+    "grid": ("#e0e0e0", "#cccccc", "#aaaaaa"),
     "status_fg": "#536a70",
     "panel_bg": "#ffffff",
     "field": "#ffffff",
@@ -121,6 +126,11 @@ THEME_DARK = {
     "sep": "#4c5756",
     "canvas": "#191e20",
     "accent": "#8bd5bb",
+    "active": "#4c5c5b",
+    "paper": "#ffffff",
+    "board_outline": "#b4c0bb",
+    "board_other": "#75817d",
+    "grid": ("#e0e0e0", "#cccccc", "#aaaaaa"),
     "status_fg": "#bbc9c5",
     "panel_bg": "#2b3333",
     "field": "#353e3e",
@@ -277,6 +287,7 @@ class StyledButton(tk.Frame):
         self._press_bg = press_bg
         self._command = command
         self._is_active = False  # Track if button is in active mode
+        self._active_bg = ACTIVE_COLOR
 
         self._surface = tk.Canvas(
             self, bg=canvas_bg, bd=0, highlightthickness=0, takefocus=True
@@ -335,7 +346,7 @@ class StyledButton(tk.Frame):
     def _on_leave(self):
         """Leave: restore appropriate bg based on active state."""
         if self._is_active:
-            self._set_bg(ACTIVE_COLOR)
+            self._set_bg(self._active_bg)
         else:
             self._set_bg(self._bg)
 
@@ -2578,7 +2589,7 @@ class KTFigure:
         self._mode_select()  # Set default mode to select
         # Snap is on by default – reflect that in the button visual state
         self._btn_snap._is_active = True
-        self._btn_snap._set_bg(ACTIVE_COLOR)
+        self._btn_snap._set_bg(self._btn_snap._active_bg)
         self._btn_snap._lbl.configure(fg="white")
         self._draw_artboard()
         self._save_state()  # Initial state
@@ -3004,7 +3015,7 @@ class KTFigure:
         # ── status label (fills remaining space)
         self._status = tk.Label(
             self._status_bar,
-            text="Ready — drag on the white A4 board to draw a plot region.",
+            text="Ready — drag on the A4 artboard to draw a plot region.",
             bd=0,
             relief="flat",
             anchor="w",
@@ -3032,6 +3043,7 @@ class KTFigure:
     def _draw_artboard(self):
         """Draw all artboards side-by-side on the canvas."""
         z = self._zoom
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
         oy = BOARD_PAD * z
         w, h = A4_W * z, A4_H * z
         for idx in range(len(self._artboards)):
@@ -3047,15 +3059,14 @@ class KTFigure:
                 outline="",
                 tags="bg",
             )
-            # white sheet — active board gets an accent border
-            border_color = ACTIVE_COLOR if is_active else "#bbb"
+            border_color = TC["board_outline"] if is_active else TC["board_other"]
             border_width = 2 if is_active else 1
             self._cv.create_rectangle(
                 ox,
                 oy,
                 ox + w,
                 oy + h,
-                fill="white",
+                fill=TC["paper"],
                 outline=border_color,
                 width=border_width,
                 tags="artboard",
@@ -3154,6 +3165,7 @@ class KTFigure:
         skipped so the canvas never becomes cluttered at low zoom levels.
         """
         z = self._zoom
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
         gs = self._grid_size          # board pts between minor lines
         oy = BOARD_PAD * z
 
@@ -3182,32 +3194,36 @@ class KTFigure:
                 if k % 10 == 0:
                     if not draw_major:
                         continue
-                    color = "#aaaaaa"
+                    color, weight = TC["grid"][2], "major"
                 elif k % 5 == 0:
                     if not draw_medium:
                         continue
-                    color = "#cccccc"
+                    color, weight = TC["grid"][1], "medium"
                 else:
                     if not draw_minor:
                         continue
-                    color = "#e0e0e0"
-                self._cv.create_line(cx, oy, cx, oy + h, fill=color, tags="grid")
+                    color, weight = TC["grid"][0], "minor"
+                self._cv.create_line(
+                    cx, oy, cx, oy + h, fill=color, tags=("grid", f"grid_{weight}")
+                )
 
             for k in range(n_rows + 1):
                 cy = oy + k * gs * z
                 if k % 10 == 0:
                     if not draw_major:
                         continue
-                    color = "#aaaaaa"
+                    color, weight = TC["grid"][2], "major"
                 elif k % 5 == 0:
                     if not draw_medium:
                         continue
-                    color = "#cccccc"
+                    color, weight = TC["grid"][1], "medium"
                 else:
                     if not draw_minor:
                         continue
-                    color = "#e0e0e0"
-                self._cv.create_line(ox, cy, ox + w, cy, fill=color, tags="grid")
+                    color, weight = TC["grid"][0], "minor"
+                self._cv.create_line(
+                    ox, cy, ox + w, cy, fill=color, tags=("grid", f"grid_{weight}")
+                )
 
         self._cv.tag_raise("grid", "artboard")
 
@@ -3222,7 +3238,7 @@ class KTFigure:
         if self._show_grid:
             self._draw_grid()
             self._btn_grid._is_active = True
-            self._btn_grid._set_bg(ACTIVE_COLOR)
+            self._btn_grid._set_bg(TC["active"])
             self._btn_grid._lbl.configure(fg="white")
             self._set_status("Grid visible. Drag objects to snap to grid lines.")
         else:
@@ -3238,7 +3254,7 @@ class KTFigure:
         TC = THEME_DARK if self._is_dark else THEME_LIGHT
         if self._snap_to_grid:
             self._btn_snap._is_active = True
-            self._btn_snap._set_bg(ACTIVE_COLOR)
+            self._btn_snap._set_bg(TC["active"])
             self._btn_snap._lbl.configure(fg="white")
             self._set_status("Snap to grid ON.")
         else:
@@ -4189,7 +4205,7 @@ class KTFigure:
         self._cv.configure(cursor="crosshair")
         self._mode_lbl.configure(text="Mode: Plot  ✏")
         self._highlight_mode_button(self._btn_draw)
-        self._set_status("Drag on the white artboard to draw a new plot region.")
+        self._set_status("Drag on the artboard to draw a new plot region.")
 
     def _mode_select(self):
         self._mode = "select"
@@ -4244,17 +4260,18 @@ class KTFigure:
             self._btn_circle,
             self._btn_text,
         ]
+        TC = THEME_DARK if self._is_dark else THEME_LIGHT
         for btn in mode_buttons:
+            btn._active_bg = TC["active"]
             if btn == active_btn:
-                btn._bg = ACTIVE_COLOR
-                btn._hover_bg = "#11695c"
-                btn._press_bg = "#0a463e"
+                btn._bg = TC["active"]
+                btn._hover_bg = TC["active"]
+                btn._press_bg = TC["active"]
                 btn._is_active = True
-                btn._set_bg(ACTIVE_COLOR)
+                btn._set_bg(TC["active"])
                 btn._lbl.configure(fg="white")
             else:
                 # Reset to default appearance using current theme colors
-                TC = THEME_DARK if self._is_dark else THEME_LIGHT
                 btn._bg = TC["btn"]
                 btn._hover_bg = TC["btn_hover"]
                 btn._press_bg = TC["btn_press"]
@@ -4333,6 +4350,17 @@ class KTFigure:
         self._cv.configure(bg=TC["canvas"])
         self._cv.itemconfigure("bg", fill="#101415" if self._is_dark else "#c5d0ca")
         self._cv.itemconfigure("ruler", fill=TC["status_fg"])
+        for idx, board in enumerate(self._cv.find_withtag("artboard")):
+            self._cv.itemconfigure(
+                board,
+                fill=TC["paper"],
+                outline=(
+                    TC["board_outline"]
+                    if idx == self._active_board else TC["board_other"]
+                ),
+            )
+        for weight, color in zip(("minor", "medium", "major"), TC["grid"]):
+            self._cv.itemconfigure(f"grid_{weight}", fill=color)
 
         # Main container frame
         self._main_frame.configure(bg=TC["canvas"])
@@ -4433,15 +4461,21 @@ class KTFigure:
         self._btn_grid._bg = TC["btn"]
         self._btn_grid._hover_bg = TC["btn_hover"]
         self._btn_grid._press_bg = TC["btn_press"]
+        self._btn_grid._active_bg = TC["active"]
         if not self._btn_grid._is_active:
             self._btn_grid._set_bg(TC["btn"])
             self._btn_grid._lbl.configure(fg=TC["btn_fg"])
+        else:
+            self._btn_grid._set_bg(TC["active"])
         self._btn_snap._bg = TC["btn"]
         self._btn_snap._hover_bg = TC["btn_hover"]
         self._btn_snap._press_bg = TC["btn_press"]
+        self._btn_snap._active_bg = TC["active"]
         if not self._btn_snap._is_active:
             self._btn_snap._set_bg(TC["btn"])
             self._btn_snap._lbl.configure(fg=TC["btn_fg"])
+        else:
+            self._btn_snap._set_bg(TC["active"])
 
     def _set_status(self, msg):
         self._status.configure(text=msg)

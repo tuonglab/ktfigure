@@ -53,11 +53,11 @@ nav a[aria-current="page"] { color: var(--teal); }
 .theme-toggle[aria-checked="true"] .theme-toggle-knob { transform: translateX(16px); }
 .theme-wave-mask { position: fixed; width: 0; height: 0; pointer-events: none; }
 @keyframes theme-wave-hold { from, to { opacity: 1; } }
-html.theme-wiping::view-transition-group(root) { animation: theme-wave-hold 1s linear both; }
+html.theme-wiping::view-transition-group(root) { animation: theme-wave-hold 1.2s linear both; }
 html.theme-wiping::view-transition-old(root), html.theme-wiping::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-html.theme-wiping::view-transition-new(root) { clip-path: url(#theme-wave-clip); }
-.theme-wave-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; pointer-events: none; }
-.theme-wave-tile { background: var(--wave-color); transform: scaleY(0); transform-origin: top; }
+html.theme-wiping::view-transition-new(root) { mask: url(#theme-wave-clip); }
+.theme-wave-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+.theme-wave-tile { position: absolute; background: var(--wave-color); opacity: 0; transform: scaleY(0); transform-origin: top; }
 .nav-dropdown { position: relative; }
 .nav-dropdown summary { cursor: pointer; list-style: none; }
 .nav-dropdown summary::-webkit-details-marker { display: none; }

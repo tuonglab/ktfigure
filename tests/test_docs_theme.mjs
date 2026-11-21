@@ -87,9 +87,10 @@ test("manual switch reveals tiles left to right with the top ahead", async () =>
   };
   function element() {
     return {
-      style: {}, classList: { add() {} }, setAttribute() {}, appendChild() {},
+      style: {}, attrs: {}, classList: { add() {} },
+      setAttribute(name, value) { this.attrs[name] = value; }, appendChild() {},
       remove() {},
-      animate(frames, options) { animations.push({ frames, options }); },
+      animate(frames, options) { animations.push({ frames, options, attrs: this.attrs }); },
     };
   }
   const document = {
@@ -116,9 +117,13 @@ test("manual switch reveals tiles left to right with the top ahead", async () =>
   assert.equal(animations.length, 0);
   listeners.click();
   await Promise.resolve();
-  assert.equal(animations.length, 6);
-  assert.ok(animations[2].options.delay > animations[0].options.delay);
-  assert.ok(animations[3].options.delay > animations[0].options.delay);
+  assert.ok(animations.length > 6);
+  const first = animations[0];
+  const right = animations.find((item) => item.attrs.y === 0 && item.attrs.x > 0);
+  const lower = animations.find((item) => item.attrs.x === 0 && item.attrs.y > 0);
+  assert.ok(right.options.delay > first.options.delay);
+  assert.ok(lower.options.delay > first.options.delay);
+  assert.notEqual(animations[0].attrs.width, animations[1].attrs.width);
   assert.equal(document.documentElement.dataset.theme, "dark");
   finish();
   await finished;
