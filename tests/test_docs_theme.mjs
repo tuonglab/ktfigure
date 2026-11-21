@@ -72,7 +72,7 @@ test("reduced motion switches immediately without animating", () => {
   assert.equal(p.button["aria-checked"], "true");
 });
 
-test("manual switch reveals tiles left to right with the top ahead", async () => {
+test("view transition uses one softened wave", async () => {
   const listeners = {};
   const animations = [];
   let finish;
@@ -117,19 +117,74 @@ test("manual switch reveals tiles left to right with the top ahead", async () =>
   assert.equal(animations.length, 0);
   listeners.click();
   await Promise.resolve();
-  assert.ok(animations.length > 6);
-  const first = animations[0];
-  const right = animations.find((item) => item.attrs.y === 0 && item.attrs.x > 0);
-  const lower = animations.find((item) => item.attrs.x === 0 && item.attrs.y > 0);
-  assert.ok(right.options.delay > first.options.delay);
-  assert.ok(lower.options.delay > first.options.delay);
-  assert.notEqual(animations[0].attrs.width, animations[1].attrs.width);
+  assert.equal(animations.length, 1);
+  assert.match(animations[0].attrs.d, / Q /);
+  assert.equal(animations[0].attrs.filter, "url(#theme-wave-soften)");
+  assert.equal(animations[0].frames[0].transform, "translateX(-65px)");
+  assert.equal(animations[0].frames[1].transform, "translateX(128px)");
   assert.equal(document.documentElement.dataset.theme, "dark");
   finish();
   await finished;
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(button.disabled, false);
+});
+
+test("fallback covers, switches, then uncovers the theme in either direction", async () => {
+  for (const saved of ["light", "dark"]) {
+    const listeners = {};
+    const animations = [];
+    const elements = [];
+    const label = {};
+    const button = {
+      animate() {}, querySelector: () => label, setAttribute() {},
+      addEventListener(name, callback) { listeners[name] = callback; },
+    };
+    function element() {
+      const el = {
+        style: {}, attrs: {}, children: [], classList: { add(name) { el.className = name; } },
+        setAttribute(name, value) { this.attrs[name] = value; },
+        appendChild(child) { this.children.push(child); },
+        remove() { this.removed = true; },
+        animate(frames) {
+          let resolve;
+          const finished = new Promise((done) => { resolve = done; });
+          animations.push({ frames, resolve });
+          return { finished };
+        },
+      };
+      elements.push(el);
+      return el;
+    }
+    const document = {
+      documentElement: { dataset: {} }, body: { appendChild() {} },
+      querySelector: () => button,
+      addEventListener(name, callback) { listeners.ready = callback; },
+      createElementNS: element,
+    };
+    runInNewContext(source, {
+      document, localStorage: { getItem: () => saved, setItem() {} },
+      getComputedStyle: () => ({ getPropertyValue: () => "#123456" }),
+      window: { innerWidth: 108, innerHeight: 72,
+        matchMedia: () => ({ matches: false, addEventListener() {} }) },
+      console,
+    });
+    listeners.ready();
+    listeners.click();
+    assert.equal(button.disabled, true);
+    assert.equal(document.documentElement.dataset.theme, saved);
+    assert.equal(animations.length, 1);
+    animations[0].resolve();
+    await Promise.resolve();
+    assert.equal(document.documentElement.dataset.theme, saved === "light" ? "dark" : "light");
+    assert.equal(animations.length, 2);
+    assert.equal(animations[1].frames[0].transform, animations[0].frames[1].transform);
+    assert.equal(animations[1].frames[1].transform, animations[0].frames[0].transform);
+    animations[1].resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(button.disabled, false);
+    assert.equal(elements.find((el) => el.className === "theme-wave-overlay").removed, true);
+  }
 });
 
 test("each documentation page includes the theme script and control", async () => {

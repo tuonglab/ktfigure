@@ -19,45 +19,71 @@
     }
   }
 
-  function tiles(createTile) {
-    const scale = Math.max(1, Math.sqrt(window.innerWidth * window.innerHeight / 2073600));
-    const widths = [19, 26, 22, 29, 21, 25, 18, 27, 23];
-    function segments(limit, offset) {
-      const result = [];
-      let position = 0;
-      while (position < limit) {
-        const size = Math.round(widths[(result.length + offset) % widths.length] * scale);
-        result.push({ position, size });
-        position += size;
-      }
-      return result;
+  function createWave(masked) {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.classList.add(masked ? "theme-wave-mask" : "theme-wave-overlay");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+
+    const defs = document.createElementNS(ns, "defs");
+    const filter = document.createElementNS(ns, "filter");
+    filter.id = "theme-wave-soften";
+    filter.setAttribute("filterUnits", "userSpaceOnUse");
+    filter.setAttribute("x", -width - 120);
+    filter.setAttribute("y", -80);
+    filter.setAttribute("width", width + 240);
+    filter.setAttribute("height", height + 160);
+    const blur = document.createElementNS(ns, "feGaussianBlur");
+    blur.setAttribute("stdDeviation", "5");
+    filter.appendChild(blur);
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+
+    const path = document.createElementNS(ns, "path");
+    const offsets = [[45, 0], [16, .08], [39, .19], [6, .30], [30, .42],
+      [0, .55], [35, .69], [8, .80], [26, 1]];
+    const points = offsets.map(([x, fraction]) => ({
+      x, y: -32 + fraction * (height + 64),
+    }));
+    let shape = `M ${-width - 80} -32 L ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+      const point = points[i];
+      const next = points[i + 1];
+      shape += ` Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
     }
-    const columns = segments(window.innerWidth, 0);
-    const rows = segments(window.innerHeight, 4);
-    const result = [];
-    for (let row = 0; row < rows.length; row++) {
-      for (let column = 0; column < columns.length; column++) {
-        const x = columns[column].position;
-        const y = rows[row].position;
-        const delay = 650 * x / window.innerWidth + 100 * y / window.innerHeight
-          + ((column * 7 + row * 11) % 7) * 8;
-        result.push({
-          element: createTile(x, y, columns[column].size, rows[row].size),
-          delay,
-        });
-      }
+    const last = points[points.length - 1];
+    shape += ` L ${last.x} ${last.y} L ${-width - 80} ${last.y} Z`;
+    path.setAttribute("d", shape);
+    path.setAttribute("fill", masked ? "white" : getComputedStyle(document.documentElement).getPropertyValue("--ink"));
+    path.setAttribute("filter", "url(#theme-wave-soften)");
+
+    if (masked) {
+      const mask = document.createElementNS(ns, "mask");
+      mask.id = "theme-wave-clip";
+      mask.setAttribute("maskUnits", "userSpaceOnUse");
+      mask.setAttribute("width", width);
+      mask.setAttribute("height", height);
+      mask.appendChild(path);
+      defs.appendChild(mask);
+    } else {
+      svg.appendChild(path);
     }
-    return result;
+    return { svg, path, start: -65, end: width + 20 };
   }
 
-  function animateTiles(items, from, to) {
-    return items.map(({ element, delay }) => element.animate(
+  function animateWave(wave, reverse = false) {
+    const { path, start, end } = wave;
+    return path.animate(
       [
-        { transform: `scaleY(${from})`, opacity: from },
-        { transform: `scaleY(${to})`, opacity: to },
+        { transform: `translateX(${reverse ? end : start}px)` },
+        { transform: `translateX(${reverse ? start : end}px)` },
       ],
-      { duration: 320, delay, easing: "ease-in-out", fill: "forwards" },
-    ));
+      { duration: 1000, easing: "ease-in-out", fill: "forwards" },
+    );
   }
 
   function switchTheme(button) {
@@ -69,33 +95,12 @@
     button.disabled = true;
 
     if (typeof document.startViewTransition === "function") {
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.classList.add("theme-wave-mask");
-      svg.setAttribute("aria-hidden", "true");
-      const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
-      clip.id = "theme-wave-clip";
-      clip.setAttribute("maskUnits", "userSpaceOnUse");
-      clip.setAttribute("width", window.innerWidth);
-      clip.setAttribute("height", window.innerHeight);
-      svg.appendChild(clip);
-      const items = tiles((x, y, width, height) => {
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("x", x);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", width + 1);
-        rect.setAttribute("height", height + 1);
-        rect.setAttribute("fill", "white");
-        rect.style.transformBox = "fill-box";
-        rect.style.transformOrigin = "top";
-        rect.style.transform = "scaleY(0)";
-        rect.style.opacity = "0";
-        clip.appendChild(rect);
-        return rect;
-      });
-      document.body.appendChild(svg);
+      const wave = createWave(true);
+      wave.path.style.transform = `translateX(${wave.start}px)`;
+      document.body.appendChild(wave.svg);
       document.documentElement.classList.add("theme-wiping");
       const transition = document.startViewTransition(applyTheme);
-      transition.ready.then(() => animateTiles(items, 0, 1)).catch((error) => {
+      transition.ready.then(() => animateWave(wave)).catch((error) => {
         console.warn("Theme transition was skipped:", error);
       });
       transition.finished
@@ -105,37 +110,26 @@
         })
         .finally(() => {
           document.documentElement.classList.remove("theme-wiping");
-          svg.remove();
+          wave.svg.remove();
           button.disabled = false;
         });
       return;
     }
 
-    const overlay = document.createElement("div");
-    overlay.className = "theme-wave-overlay";
-    overlay.setAttribute("aria-hidden", "true");
-    overlay.style.setProperty("--wave-color", getComputedStyle(document.documentElement).getPropertyValue("--ink"));
-    const items = tiles((x, y, width, height) => {
-      const tile = document.createElement("span");
-      tile.className = "theme-wave-tile";
-      Object.assign(tile.style, {
-        left: `${x}px`, top: `${y}px`, width: `${width + 1}px`, height: `${height + 1}px`,
-      });
-      overlay.appendChild(tile);
-      return tile;
-    });
-    document.body.appendChild(overlay);
-    Promise.all(animateTiles(items, 0, 1).map((animation) => animation.finished))
+    const wave = createWave(false);
+    wave.path.style.transform = `translateX(${wave.start}px)`;
+    document.body.appendChild(wave.svg);
+    animateWave(wave).finished
       .then(() => {
         applyTheme();
-        return Promise.all(animateTiles(items, 1, 0).map((animation) => animation.finished));
+        return animateWave(wave, true).finished;
       })
       .catch((error) => {
         console.warn("Theme transition was interrupted:", error);
         applyTheme();
       })
       .finally(() => {
-        overlay.remove();
+        wave.svg.remove();
         button.disabled = false;
       });
   }
