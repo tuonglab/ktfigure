@@ -2761,8 +2761,11 @@ class KTFigure:
         self._btn_grid = tbtn(tb3, "⊞  Grid", self._toggle_grid_visible)
         self._btn_snap = tbtn(tb3, "⊡  Snap", self._toggle_snap_to_grid)
         self._spacing_var = tk.StringVar(value="1 pt")
+        spacing_host = tk.Frame(tb3, bg=TB_BG, width=70, height=32)
+        spacing_host.pack(side="left", padx=(0, 4), pady=4)
+        spacing_host.pack_propagate(False)
         self._spacing_combo = ttk.Combobox(
-            tb3,
+            spacing_host,
             textvariable=self._spacing_var,
             values=["1 pt", "2 pt", "5 pt", "10 pt", "20 pt", "50 pt"],
             width=5,
@@ -2770,7 +2773,7 @@ class KTFigure:
             takefocus=False,
             style="Toolbar.TCombobox",
         )
-        self._spacing_combo.pack(side="left", padx=(0, 4), pady=4)
+        self._spacing_combo.pack(side="left", fill="both", expand=True)
         self._spacing_combo.bind(
             "<<ComboboxSelected>>",
             lambda _e: (self._apply_spacing_entry(), self._cv.focus_set()),
