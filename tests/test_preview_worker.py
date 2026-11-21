@@ -8,7 +8,10 @@ from unittest.mock import patch, MagicMock
 
 import pandas as pd
 
-from ktfigure.preview_worker import PreviewJob, render_thumbnail, main, _binary_stream, _command
+from ktfigure.preview_worker import (
+    PreviewJob, render_thumbnail, main, _binary_stream, _command, _READY, _RENDERING,
+    _FINISHED,
+)
 
 
 def request(df=None, plot_type="scatter"):
@@ -70,7 +73,7 @@ def test_slow_actual_render_is_killed_and_reaped():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
-        listener.settimeout(2)
+        listener.settimeout(10)
         port = listener.getsockname()[1]
         code = (
             "import socket\n"
@@ -83,11 +86,11 @@ def test_slow_actual_render_is_killed_and_reaped():
             "PlotRenderer._render_to_ax = signal_then_render\n"
             "main()\n"
         )
-        started = time.monotonic()
         with patch("ktfigure.preview_worker._command", return_value=[sys.executable, "-c", code]):
             job = PreviewJob(request(df, "swarm"))
             connection, _ = listener.accept()
             connection.close()
+            started = time.monotonic()
             assert job.done.wait(4)
     assert job.result == ("timeout", None)
     assert time.monotonic() - started < 3.5
@@ -121,7 +124,11 @@ def test_worker_entry_protocol_and_error():
             return_value=b"png",
         ):
             main()
-        status, value = pickle.loads(target.buffer.getvalue())
+        data = target.buffer.getvalue()
+        assert data.startswith(_READY + _RENDERING)
+        offset = len(_READY) + len(_RENDERING) + 8
+        assert data[offset:].startswith(_FINISHED)
+        status, value = pickle.loads(data[offset + len(_FINISHED) + 8:])
         assert (status, value) == (
             ("error", "broken render") if failure else ("ok", b"png")
         )
@@ -149,9 +156,9 @@ def test_serialization_error_and_expired_request_never_launch():
     assert job.result[0] == "error"
     assert job._process is None
 
-    job = PreviewJob(request(), timeout=0)
+    job = PreviewJob(request(), startup_timeout=0)
     assert job.done.wait(3)
-    assert job.result == ("timeout", None)
+    assert job.result == ("startup_timeout", None)
     assert job._process is None
 
 
@@ -238,17 +245,90 @@ def test_communication_failure_kills_worker():
 
     def start(*args, **kwargs):
         process = popen(*args, **kwargs)
-        communicate = process.communicate
-
+        read = process.stdout.read
         def fail_once(*args, **kwargs):
-            process.communicate = communicate
+            process.stdout.read = read
             raise RuntimeError("pipe failed")
-
-        process.communicate = fail_once
+        process.stdout.read = fail_once
         return process
 
     with patch("ktfigure.preview_worker.subprocess.Popen", side_effect=start):
         job = PreviewJob(request())
         assert job.done.wait(3)
     assert job.result == ("error", "pipe failed")
+    assert job._process.poll() is not None
+
+
+def test_slow_startup_does_not_consume_render_budget():
+    code = (
+        "import time\n"
+        "time.sleep(2.3)\n"
+        "from ktfigure.preview_worker import main\n"
+        "main()\n"
+    )
+    started = time.monotonic()
+    with patch("ktfigure.preview_worker._command", return_value=[sys.executable, "-c", code]):
+        job = PreviewJob(request(), startup_timeout=10)
+        assert job.done.wait(10)
+    assert time.monotonic() - started > 2
+    assert job.result[0] == "ok"
+    assert job.result[1].startswith(b"\x89PNG")
+    assert job._process.poll() == 0
+
+
+def test_slow_worker_shutdown_does_not_consume_render_budget():
+    code = (
+        "import time\n"
+        "from ktfigure.preview_worker import main\n"
+        "main()\n"
+        "time.sleep(2.3)\n"
+    )
+    with patch("ktfigure.preview_worker._command", return_value=[sys.executable, "-c", code]):
+        job = PreviewJob(request())
+        assert job.done.wait(10)
+    assert job.result[0] == "ok"
+    assert job._process.poll() == 0
+
+
+def test_startup_watchdog_kills_hung_worker():
+    with patch("ktfigure.preview_worker._command", return_value=[
+        sys.executable, "-c", "import time; time.sleep(30)"
+    ]):
+        job = PreviewJob(request(), startup_timeout=0.5)
+        assert job.done.wait(4)
+    assert job.result == ("startup_timeout", None)
+    assert job._process.poll() is not None
+
+
+def test_cancel_during_worker_startup():
+    with patch("ktfigure.preview_worker._command", return_value=[
+        sys.executable, "-c", "import time; time.sleep(30)"
+    ]):
+        job = PreviewJob(request())
+        deadline = time.monotonic() + 3
+        while job._process is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert job._process is not None
+        job.cancel()
+        assert job.done.wait(3)
+    assert job._process.poll() is not None
+    job._thread.join(1)
+    assert not job._thread.is_alive()
+
+
+def test_finishing_watchdog_kills_hung_worker():
+    code = (
+        "import sys, time, struct\n"
+        f"sys.stdout.buffer.write({ _READY!r }); sys.stdout.buffer.flush()\n"
+        "sys.stdin.buffer.read()\n"
+        f"sys.stdout.buffer.write({ _RENDERING!r } + struct.pack('!d', time.monotonic()))\n"
+        f"sys.stdout.buffer.write({ _FINISHED!r } + struct.pack('!d', time.monotonic()))\n"
+        "sys.stdout.buffer.flush()\n"
+        "time.sleep(30)\n"
+    )
+    with patch("ktfigure.preview_worker._command", return_value=[sys.executable, "-c", code]), \
+         patch("ktfigure.preview_worker.PREVIEW_FINISH_TIMEOUT", 0.5):
+        job = PreviewJob(request())
+        assert job.done.wait(4)
+    assert job.result == ("finish_timeout", None)
     assert job._process.poll() is not None

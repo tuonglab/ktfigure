@@ -1063,17 +1063,31 @@ class PlotConfigDialog(tk.Toplevel):
     def _poll_preview(self):
         self._preview_after = None
         job = self._preview_job
-        if not job.done.is_set() and time.monotonic() < job.deadline:
+        phase, deadline = job.timing
+        if not job.done.is_set() and time.monotonic() < deadline:
             self._preview_after = self.after(25, self._poll_preview)
             return
         if not job.done.is_set():
             job.cancel()
-            status, value = "timeout", None
+            status, value = {
+                "render": "timeout", "startup": "startup_timeout",
+                "finishing": "finish_timeout",
+            }[phase], None
         else:
             status, value = job.result or ("error", "Preview worker stopped.")
         self._preview_job = None
         try:
-            if status == "timeout":
+            if status == "finish_timeout":
+                self._preview_lbl.configure(
+                    image="", text="Preview worker took too long to finish. Try Refresh.",
+                    bg="#ffe0e0",
+                )
+            elif status == "startup_timeout":
+                self._preview_lbl.configure(
+                    image="", text="Preview worker took too long to start. Try Refresh.",
+                    bg="#ffe0e0",
+                )
+            elif status == "timeout":
                 self._preview_lbl.configure(
                     image="", text="Preview stopped after 2 seconds. Try a simpler plot or less data. Apply still uses all data.",
                     bg="#ffe0e0",

@@ -3,6 +3,7 @@
 import io
 import os
 import pickle
+import struct
 import subprocess
 import sys
 import threading
@@ -10,6 +11,11 @@ import time
 
 
 PREVIEW_TIMEOUT = 2.0
+PREVIEW_STARTUP_TIMEOUT = 45.0
+PREVIEW_FINISH_TIMEOUT = 10.0
+_READY = b"KTFREADY\n"
+_RENDERING = b"KTFRENDER"
+_FINISHED = b"KTFFINISH"
 
 
 def _command():
@@ -21,8 +27,10 @@ def _command():
 class PreviewJob:
     """Run one preview without blocking Tk; cancellation kills its renderer."""
 
-    def __init__(self, request, timeout=PREVIEW_TIMEOUT):
-        self.deadline = time.monotonic() + timeout
+    def __init__(self, request, timeout=PREVIEW_TIMEOUT,
+                 startup_timeout=PREVIEW_STARTUP_TIMEOUT):
+        self.timing = ("startup", time.monotonic() + startup_timeout)
+        self._timeout = timeout
         self.result = None
         self.done = threading.Event()
         self._cancelled = False
@@ -49,8 +57,8 @@ class PreviewJob:
             payload = pickle.dumps(request, protocol=pickle.HIGHEST_PROTOCOL)
             if self._cancelled:
                 return
-            if time.monotonic() >= self.deadline:
-                self.result = ("timeout", None)
+            if time.monotonic() >= self.timing[1]:
+                self.result = ("startup_timeout", None)
                 return
             env = os.environ.copy()
             if not getattr(sys, "frozen", False):
@@ -70,24 +78,77 @@ class PreviewJob:
                 self._process = process
                 if self._cancelled:
                     process.kill()
-            try:
-                output, errors = process.communicate(
-                    payload, timeout=max(0, self.deadline - time.monotonic())
-                )
-            except subprocess.TimeoutExpired:
+            exchange_done = threading.Event()
+            response = {}
+            errors = bytearray()
+
+            def read_errors():
+                for chunk in iter(lambda: process.stderr.read(4096), b""):
+                    if len(errors) < 65536:
+                        errors.extend(chunk[:65536 - len(errors)])
+
+            def exchange():
+                try:
+                    if process.stdout.read(len(_READY)) != _READY:
+                        raise RuntimeError("Preview worker did not signal readiness.")
+                    process.stdin.write(payload)
+                    process.stdin.close()
+                    header = process.stdout.read(len(_RENDERING) + 8)
+                    if len(header) != len(_RENDERING) + 8 or not header.startswith(_RENDERING):
+                        raise RuntimeError("Preview worker did not start rendering.")
+                    started = struct.unpack("!d", header[len(_RENDERING):])[0]
+                    self.timing = ("render", started + self._timeout)
+                    header = process.stdout.read(len(_FINISHED) + 8)
+                    if len(header) != len(_FINISHED) + 8 or not header.startswith(_FINISHED):
+                        raise RuntimeError("Preview worker did not finish rendering.")
+                    finished = struct.unpack("!d", header[len(_FINISHED):])[0]
+                    response["render_finished"] = finished
+                    if finished <= started + self._timeout:
+                        self.timing = ("finishing", time.monotonic() + PREVIEW_FINISH_TIMEOUT)
+                    response["output"] = process.stdout.read()
+                    process.wait()
+                except Exception as exc:
+                    response["error"] = exc
+                finally:
+                    exchange_done.set()
+
+            stderr_thread = threading.Thread(target=read_errors, daemon=True)
+            io_thread = threading.Thread(target=exchange, daemon=True)
+            stderr_thread.start()
+            io_thread.start()
+            expired = None
+            while not exchange_done.wait(0.02):
+                phase, deadline = self.timing
+                if time.monotonic() >= deadline:
+                    expired = {
+                        "render": "timeout", "startup": "startup_timeout",
+                        "finishing": "finish_timeout",
+                    }[phase]
+                    process.kill()
+                    break
+            killed_for_error = process.poll() is None and "error" in response
+            if process.poll() is None and (expired or killed_for_error):
                 process.kill()
-                process.communicate()
-                self.result = ("timeout", None)
+            process.wait()
+            io_thread.join()
+            stderr_thread.join()
+            if expired:
+                self.result = (expired, None)
                 return
             if self._cancelled:
                 return
-            if time.monotonic() >= self.deadline:
+            if (self.timing[0] == "render"
+                    and response.get("render_finished", 0) > self.timing[1]):
                 self.result = ("timeout", None)
+            elif killed_for_error:
+                self.result = ("error", str(response["error"]))
             elif process.returncode:
                 detail = errors.decode("utf-8", errors="replace").strip()
                 self.result = ("error", detail or "Preview worker exited unexpectedly.")
+            elif "error" in response:
+                self.result = ("error", str(response["error"]))
             else:
-                self.result = pickle.loads(output)
+                self.result = pickle.loads(response["output"])
         except Exception as exc:
             if not self._cancelled:
                 self.result = ("error", str(exc))
@@ -95,7 +156,11 @@ class PreviewJob:
             try:
                 if process is not None and process.poll() is None:
                     process.kill()
-                    process.communicate()
+                    process.wait()
+                if process is not None:
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None and not stream.closed:
+                            stream.close()
             finally:
                 self.done.set()
 
@@ -146,12 +211,21 @@ def _binary_stream(name, fd, mode):
 
 
 def main():
+    # Imports are complete before readiness; input transfer and unpickling are
+    # covered by the startup watchdog, not the rendering budget.
+    output = _binary_stream("stdout", 1, "wb")
+    output.write(_READY)
+    output.flush()
     try:
         request = pickle.load(_binary_stream("stdin", 0, "rb"))
+        output.write(_RENDERING + struct.pack("!d", time.monotonic()))
+        output.flush()
         result = ("ok", render_thumbnail(request))
     except Exception as exc:
+        if "request" not in locals():
+            output.write(_RENDERING + struct.pack("!d", time.monotonic()))
         result = ("error", str(exc))
-    output = _binary_stream("stdout", 1, "wb")
+    output.write(_FINISHED + struct.pack("!d", time.monotonic()))
     pickle.dump(result, output)
     output.flush()
 

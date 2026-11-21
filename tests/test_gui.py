@@ -42,7 +42,7 @@ def pump(root, n=10):
 
 
 def wait_for_preview(root, dialog):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 55
     while dialog._preview_job is not None and time.monotonic() < deadline:
         root.update()
         time.sleep(0.01)
@@ -245,12 +245,31 @@ def test_preview_deadline_cancels_even_if_job_has_not_reported():
         with patch("ktfigure.PreviewJob") as constructor:
             job = constructor.return_value
             job.done.is_set.return_value = False
-            job.deadline = time.monotonic() - 1
+            job.timing = ("render", time.monotonic() - 1)
             dialog._update_preview()
             dialog.after_cancel(dialog._preview_after)
             dialog._poll_preview()
             job.cancel.assert_called_once()
             assert "stopped after 2 seconds" in dialog._preview_lbl.cget("text")
+    finally:
+        dialog.destroy()
+        root.destroy()
+
+
+def test_preview_startup_timeout_is_distinct():
+    root = tk.Tk()
+    root.withdraw()
+    dialog = PlotConfigDialog(root, make_sample_block(pd.DataFrame({"x": [1], "y": [2]})))
+    try:
+        with patch("ktfigure.PreviewJob") as constructor:
+            job = constructor.return_value
+            job.done.is_set.return_value = False
+            job.timing = ("startup", time.monotonic() - 1)
+            dialog._update_preview()
+            dialog.after_cancel(dialog._preview_after)
+            dialog._poll_preview()
+            job.cancel.assert_called_once()
+            assert "too long to start" in dialog._preview_lbl.cget("text")
     finally:
         dialog.destroy()
         root.destroy()

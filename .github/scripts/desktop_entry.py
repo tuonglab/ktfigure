@@ -14,6 +14,9 @@ import pandas as pd
 from PIL import Image, ImageTk
 
 from ktfigure import KTFigure, PlotBlock, PlotConfigDialog, PlotRenderer, main
+from ktfigure.preview_worker import (
+    PREVIEW_STARTUP_TIMEOUT, PREVIEW_TIMEOUT, PREVIEW_FINISH_TIMEOUT,
+)
 
 
 def smoke_test():
@@ -37,7 +40,10 @@ def smoke_test():
         dialog = PlotConfigDialog(root, block)
         try:
             dialog._update_preview()
-            deadline = time.monotonic() + 5
+            deadline = (
+                time.monotonic() + PREVIEW_STARTUP_TIMEOUT + PREVIEW_TIMEOUT
+                + PREVIEW_FINISH_TIMEOUT + 5
+            )
             while dialog._preview_job is not None and time.monotonic() < deadline:
                 root.update()
                 time.sleep(0.01)
