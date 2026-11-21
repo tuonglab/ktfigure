@@ -1287,6 +1287,29 @@ class TestTheme:
         assert spin.get() == "2"
 
 
+def test_alignment_and_grid_toolbar_fits_at_larger_scaling():
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        root.tk.call("tk", "scaling", 1.65)
+        app = KTFigure(root)
+        root.geometry("960x700")
+        root.deiconify()
+        pump(root)
+
+        for row in app._theme_widgets["tbs"][2:]:
+            for widget in row.winfo_children():
+                assert widget.winfo_ismapped()
+                assert widget.winfo_width() >= widget.winfo_reqwidth()
+
+        app._spacing_combo.set("10 pt")
+        app._spacing_combo.event_generate("<<ComboboxSelected>>")
+        pump(root)
+        assert app._grid_size == app._snap_grid_size == 10
+    finally:
+        root.destroy()
+
+
 # ---------------------------------------------------------------------------
 # KTFigure — status bar
 # ---------------------------------------------------------------------------

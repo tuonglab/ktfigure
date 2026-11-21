@@ -2743,7 +2743,7 @@ class KTFigure:
         _b2.pack(side="top", fill="x")
         _all_seps.append(_b2)
 
-        # Row 3: All 7 alignment buttons
+        # Row 3: Alignment
         tb3 = tk.Frame(self.root, bg=TB_BG, height=40)
         tb3.pack(side="top", fill="x")
         tb3.pack_propagate(False)
@@ -2755,17 +2755,25 @@ class KTFigure:
         tbtn(tb3, "⬇  Align B", self._align_bottom)
         tbtn(tb3, "⊟  Align H", self._align_center)
         tbtn(tb3, "⎅  Align V", self._align_middle)
-        tbtn(tb3, "↔  Distribute H", self._distribute_horizontal)
-        tbtn(tb3, "↕  Distribute V", self._distribute_vertical)
-        sep(tb3)
-        self._btn_grid = tbtn(tb3, "⊞  Grid", self._toggle_grid_visible)
-        self._btn_snap = tbtn(tb3, "⊡  Snap", self._toggle_snap_to_grid)
+
+        _b3 = tk.Frame(self.root, bg=TC["sep"], height=1)
+        _b3.pack(side="top", fill="x")
+        _all_seps.append(_b3)
+
+        # Row 4: Distribution and grid controls
+        tb4 = tk.Frame(self.root, bg=TB_BG, height=40)
+        tb4.pack(side="top", fill="x")
+        tb4.pack_propagate(False)
+        _all_tbs.append(tb4)
+
+        tbtn(tb4, "↔  Distribute H", self._distribute_horizontal)
+        tbtn(tb4, "↕  Distribute V", self._distribute_vertical)
+        sep(tb4)
+        self._btn_grid = tbtn(tb4, "⊞  Grid", self._toggle_grid_visible)
+        self._btn_snap = tbtn(tb4, "⊡  Snap", self._toggle_snap_to_grid)
         self._spacing_var = tk.StringVar(value="1 pt")
-        spacing_host = tk.Frame(tb3, bg=TB_BG, width=70, height=32)
-        spacing_host.pack(side="left", padx=(0, 4), pady=4)
-        spacing_host.pack_propagate(False)
         self._spacing_combo = ttk.Combobox(
-            spacing_host,
+            tb4,
             textvariable=self._spacing_var,
             values=["1 pt", "2 pt", "5 pt", "10 pt", "20 pt", "50 pt"],
             width=5,
@@ -2773,7 +2781,7 @@ class KTFigure:
             takefocus=False,
             style="Toolbar.TCombobox",
         )
-        self._spacing_combo.pack(side="left", fill="both", expand=True)
+        self._spacing_combo.pack(side="left", padx=(0, 4), pady=4)
         self._spacing_combo.bind(
             "<<ComboboxSelected>>",
             lambda _e: (self._apply_spacing_entry(), self._cv.focus_set()),
@@ -2785,9 +2793,9 @@ class KTFigure:
         self._spacing_combo.bind("<FocusOut>", lambda _e: self._apply_spacing_entry())
 
         # Final bottom border
-        _b3 = tk.Frame(self.root, bg=TC["sep"], height=1)
-        _b3.pack(side="top", fill="x")
-        _all_seps.append(_b3)
+        _b4 = tk.Frame(self.root, bg=TC["sep"], height=1)
+        _b4.pack(side="top", fill="x")
+        _all_seps.append(_b4)
 
         # ── main ───────────────────────────────────────────────────────────
         main = tk.Frame(self.root, bg=TC["canvas"])
