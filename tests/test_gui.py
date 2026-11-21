@@ -360,6 +360,20 @@ class TestStyledButton:
         btn = StyledButton(self.root, text="X", command=lambda: None)
         assert btn._is_active is False
 
+    def test_rounded_button_supports_mouse_and_keyboard(self):
+        calls = []
+        btn = StyledButton(self.root, text="X", command=lambda: calls.append(1))
+        btn.pack()
+        self.root.deiconify()
+        pump(self.root)
+        btn._surface.event_generate("<ButtonRelease-1>", x=2, y=2)
+        btn._surface.focus_force()
+        pump(self.root)
+        btn._surface.event_generate("<KeyPress-space>")
+        pump(self.root)
+        assert calls == [1, 1]
+        assert btn._surface.itemcget(btn._shape, "fill") == btn._hover_bg
+
 
 # ---------------------------------------------------------------------------
 # ThemeToggle
@@ -1167,6 +1181,134 @@ class TestTheme:
         self.app._on_theme_click()
         assert self.app._theme_manual_override is True
 
+    def test_theme_updates_fields_and_active_controls(self):
+        from tkinter import ttk
+        from ktfigure import THEME_DARK, THEME_LIGHT
+
+        for dark, colors in ((True, THEME_DARK), (False, THEME_LIGHT)):
+            self.app._is_dark = dark
+            self.app._apply_theme()
+            style = ttk.Style(self.root)
+            assert style.lookup("TCombobox", "fieldbackground", ("readonly",)) == colors["field"]
+            assert style.lookup("Treeview", "foreground") == colors["btn_fg"]
+            assert self.app._btn_select._lbl.cget("bg") == colors["active"]
+            assert self.app._btn_snap._lbl.cget("bg") == colors["active"]
+            self.app._btn_snap._on_leave()
+            assert self.app._btn_snap._lbl.cget("bg") == colors["active"]
+
+    def test_artboards_and_grid_follow_theme_across_pages(self):
+        from ktfigure import THEME_DARK, THEME_LIGHT
+
+        self.app._add_artboard()
+        self.app._grid_size = 20
+        self.app._toggle_grid_visible()
+        for dark, colors in ((True, THEME_DARK), (False, THEME_LIGHT)):
+            self.app._is_dark = dark
+            self.app._apply_theme()
+            boards = self.app._cv.find_withtag("artboard")
+            assert len(boards) == 2
+            assert all(self.app._cv.itemcget(board, "fill") == colors["paper"] for board in boards)
+            assert self.app._cv.itemcget(boards[1], "outline") == colors["board_outline"]
+            assert self.app._cv.itemcget(boards[0], "outline") == colors["board_other"]
+            for weight, color in zip(("minor", "medium", "major"), colors["grid"]):
+                lines = self.app._cv.find_withtag(f"grid_{weight}")
+                assert lines
+                assert self.app._cv.itemcget(lines[0], "fill") == color
+            self.app._cv.delete("bg", "artboard", "ruler")
+            self.app._draw_artboard()
+            assert self.app._cv.itemcget(self.app._cv.find_withtag("artboard")[1], "fill") == colors["paper"]
+
+    def test_compact_toolbar_and_draggable_scrollbar(self):
+        from tkinter import ttk
+
+        self.root.deiconify()
+        self.root.geometry("960x700")
+        pump(self.root)
+        assert all(row.winfo_height() == 40 for row in self.app._theme_widgets["tbs"])
+        combo = self.app._spacing_combo
+        assert combo.winfo_width() == combo.winfo_reqwidth()
+
+        scrollbar = next(
+            widget for widget in self.app._canvas_outer.winfo_children()
+            if isinstance(widget, ttk.Scrollbar) and str(widget.cget("orient")) == "vertical"
+        )
+        x = scrollbar.winfo_width() // 2
+        y = next(
+            pos for pos in range(scrollbar.winfo_height())
+            if scrollbar.identify(x, pos).endswith("thumb")
+        ) + 5
+        before = self.app._cv.yview()[0]
+        scrollbar.event_generate("<ButtonPress-1>", x=x, y=y)
+        scrollbar.event_generate("<B1-Motion>", x=x, y=y + 70)
+        scrollbar.event_generate("<ButtonRelease-1>", x=x, y=y + 70)
+        pump(self.root)
+        assert self.app._cv.yview()[0] > before
+
+    def test_rounded_controls_keep_native_interactions(self):
+        from tkinter import ttk
+
+        self.root.deiconify()
+        self.root.geometry("960x700")
+        pump(self.root)
+        assert self.root._control_images["button"].transparency_get(0, 0)
+        assert self.root._control_images["field"].transparency_get(0, 0)
+
+        self.app._btn_add_board.invoke()
+        assert len(self.app._artboards) == 2
+        self.app._btn_del_board.invoke()
+        assert len(self.app._artboards) == 1
+        assert str(self.app._btn_del_board.cget("state")) == "disabled"
+
+        combo = self.app._zoom_combo
+        y = combo.winfo_height() // 2
+        x = next(
+            pos for pos in range(combo.winfo_width())
+            if combo.identify(pos, y).endswith("downarrow")
+        )
+        combo.event_generate("<ButtonPress-1>", x=x, y=y)
+        combo.event_generate("<ButtonRelease-1>", x=x, y=y)
+        pump(self.root)
+        popup = self.root.tk.call("ttk::combobox::PopdownWindow", str(combo))
+        assert self.root.tk.getboolean(self.root.tk.call("winfo", "ismapped", popup))
+        combo.event_generate("<Escape>")
+
+        spin = ttk.Spinbox(self.root, from_=1, to=10)
+        spin.pack()
+        spin.set("1")
+        pump(self.root)
+        x, y = next(
+            (x, y) for x in range(spin.winfo_width())
+            for y in range(spin.winfo_height())
+            if spin.identify(x, y).endswith("uparrow")
+        )
+        spin.event_generate("<ButtonPress-1>", x=x, y=y)
+        spin.event_generate("<ButtonRelease-1>", x=x, y=y)
+        pump(self.root)
+        assert spin.get() == "2"
+
+
+def test_alignment_and_grid_toolbar_fits_at_larger_scaling():
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        root.tk.call("tk", "scaling", 1.65)
+        app = KTFigure(root)
+        root.geometry("960x700")
+        root.deiconify()
+        pump(root)
+
+        for row in app._theme_widgets["tbs"][2:]:
+            for widget in row.winfo_children():
+                assert widget.winfo_ismapped()
+                assert widget.winfo_width() >= widget.winfo_reqwidth()
+
+        app._spacing_combo.set("10 pt")
+        app._spacing_combo.event_generate("<<ComboboxSelected>>")
+        pump(root)
+        assert app._grid_size == app._snap_grid_size == 10
+    finally:
+        root.destroy()
+
 
 # ---------------------------------------------------------------------------
 # KTFigure — status bar
@@ -1275,6 +1417,25 @@ class TestExport:
         with patch("ktfigure.filedialog.asksaveasfilename", return_value=out):
             self.app._export_png()
         assert os.path.exists(out)
+
+    def test_night_artboard_and_png_background_are_white(self, tmp_path, sample_df):
+        from PIL import Image
+
+        self.app._is_dark = True
+        self.app._apply_theme()
+        board = self.app._cv.find_withtag("artboard")[0]
+        assert self.app._cv.itemcget(board, "fill") == "#ffffff"
+        block = PlotBlock(0, 0, DPI * 3, DPI * 2)
+        block.df = sample_df
+        block.plot_type = "scatter"
+        block.col_x, block.col_y = "x", "y"
+        self.app._blocks.append(block)
+        self.app._render_block(block)
+        out = str(tmp_path / "night.png")
+        with patch("ktfigure.filedialog.asksaveasfilename", return_value=out):
+            self.app._export_png()
+        with Image.open(out) as image:
+            assert image.convert("RGB").getpixel((A4_W - 1, A4_H - 1)) == (255, 255, 255)
 
     def test_export_pdf_with_block(self, tmp_path, sample_df):
         b = PlotBlock(0, 0, DPI * 3, DPI * 2)

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Learn to make and style publication-ready plots with ktfigure.">
   <title>Getting started | ktfigure</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css">
   <script src="motion.js" defer></script>
 </head>
@@ -27,6 +28,7 @@
       </details>
       <a href="community.html">Community</a>
       <a href="https://github.com/tuonglab/ktfigure">GitHub ↗</a>
+      <button class="theme-toggle" type="button" role="switch" aria-label="Night mode" aria-checked="false" hidden><span class="theme-toggle-track" aria-hidden="true"><span class="theme-toggle-knob"></span></span><span class="theme-toggle-label">Day</span></button>
     </nav>
   </header>
 
@@ -70,7 +72,7 @@
           <p class="caption">The small step illustrations are schematics of the workflow.</p>
           <div class="note">For large scatterplots, <strong>GPU scatter preview</strong> opens a separate interactive view of numeric X and Y. It uses normalized axes and a single colour; the original ranges and omitted non-finite pairs appear above the plot. The artboard and exported figure use CPU rendering. See <a href="index.html#quick-start">Quick Start</a> for details.</div>
           <ol class="steps">
-            <li>Click <strong>Plot</strong> in the toolbar, then click and drag a large rectangle on the white artboard.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="A plot region being drawn on the artboard."><use href="images/step-illustrations.svg#canvas"></use></svg></li>
+            <li>Click <strong>Plot</strong> in the toolbar, then click and drag a large rectangle on the artboard.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="A plot region being drawn on the artboard."><use href="images/step-illustrations.svg#canvas"></use></svg></li>
             <li>In the <strong>Data</strong> tab, choose <strong>Browse CSV / TSV…</strong> and open <code>example_data.csv</code>. The dialog moves to the plot configuration tab.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="The data browser opening a CSV file."><use href="images/step-illustrations.svg#browse"></use></svg></li>
             <li>Choose <strong>scatter</strong>. Set <strong>X axis / category</strong> to <code>temperature</code>, <strong>Y axis / value</strong> to <code>sales</code>, and <strong>Hue / colour group</strong> to <code>season</code>. Leave Size as <strong>(none)</strong>.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="Scatter plot mappings for temperature, sales and season."><use href="images/step-illustrations.svg#scatter-map"></use></svg></li>
             <li>Check the preview, then click <strong>Apply</strong>. If you want to change the data mapping later, select the plot and click <strong>Edit plot</strong> or double-click it.<svg class="step-visual" viewBox="0 0 240 120" role="img" aria-label="A scatter plot preview beside the Apply control."><use href="images/step-illustrations.svg#preview"></use></svg></li>
