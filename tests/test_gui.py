@@ -360,6 +360,20 @@ class TestStyledButton:
         btn = StyledButton(self.root, text="X", command=lambda: None)
         assert btn._is_active is False
 
+    def test_rounded_button_supports_mouse_and_keyboard(self):
+        calls = []
+        btn = StyledButton(self.root, text="X", command=lambda: calls.append(1))
+        btn.pack()
+        self.root.deiconify()
+        pump(self.root)
+        btn._surface.event_generate("<ButtonRelease-1>", x=2, y=2)
+        btn._surface.focus_force()
+        pump(self.root)
+        btn._surface.event_generate("<KeyPress-space>")
+        pump(self.root)
+        assert calls == [1, 1]
+        assert btn._surface.itemcget(btn._shape, "fill") == btn._hover_bg
+
 
 # ---------------------------------------------------------------------------
 # ThemeToggle
@@ -1181,6 +1195,74 @@ class TestTheme:
             assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
             self.app._btn_snap._on_leave()
             assert self.app._btn_snap._lbl.cget("bg") == ACTIVE_COLOR
+
+    def test_compact_toolbar_and_draggable_scrollbar(self):
+        from tkinter import ttk
+
+        self.root.deiconify()
+        self.root.geometry("960x700")
+        pump(self.root)
+        assert all(row.winfo_height() == 40 for row in self.app._theme_widgets["tbs"])
+        combo = self.app._spacing_combo
+        assert combo.winfo_width() == combo.winfo_reqwidth()
+
+        scrollbar = next(
+            widget for widget in self.app._canvas_outer.winfo_children()
+            if isinstance(widget, ttk.Scrollbar) and str(widget.cget("orient")) == "vertical"
+        )
+        x = scrollbar.winfo_width() // 2
+        y = next(
+            pos for pos in range(scrollbar.winfo_height())
+            if scrollbar.identify(x, pos).endswith("thumb")
+        ) + 5
+        before = self.app._cv.yview()[0]
+        scrollbar.event_generate("<ButtonPress-1>", x=x, y=y)
+        scrollbar.event_generate("<B1-Motion>", x=x, y=y + 70)
+        scrollbar.event_generate("<ButtonRelease-1>", x=x, y=y + 70)
+        pump(self.root)
+        assert self.app._cv.yview()[0] > before
+
+    def test_rounded_controls_keep_native_interactions(self):
+        from tkinter import ttk
+
+        self.root.deiconify()
+        self.root.geometry("960x700")
+        pump(self.root)
+        assert self.root._control_images["button"].transparency_get(0, 0)
+        assert self.root._control_images["field"].transparency_get(0, 0)
+
+        self.app._btn_add_board.invoke()
+        assert len(self.app._artboards) == 2
+        self.app._btn_del_board.invoke()
+        assert len(self.app._artboards) == 1
+        assert str(self.app._btn_del_board.cget("state")) == "disabled"
+
+        combo = self.app._zoom_combo
+        y = combo.winfo_height() // 2
+        x = next(
+            pos for pos in range(combo.winfo_width())
+            if combo.identify(pos, y).endswith("downarrow")
+        )
+        combo.event_generate("<ButtonPress-1>", x=x, y=y)
+        combo.event_generate("<ButtonRelease-1>", x=x, y=y)
+        pump(self.root)
+        popup = self.root.tk.call("ttk::combobox::PopdownWindow", str(combo))
+        assert self.root.tk.getboolean(self.root.tk.call("winfo", "ismapped", popup))
+        combo.event_generate("<Escape>")
+
+        spin = ttk.Spinbox(self.root, from_=1, to=10)
+        spin.pack()
+        spin.set("1")
+        pump(self.root)
+        x, y = next(
+            (x, y) for x in range(spin.winfo_width())
+            for y in range(spin.winfo_height())
+            if spin.identify(x, y).endswith("uparrow")
+        )
+        spin.event_generate("<ButtonPress-1>", x=x, y=y)
+        spin.event_generate("<ButtonRelease-1>", x=x, y=y)
+        pump(self.root)
+        assert spin.get() == "2"
 
 
 # ---------------------------------------------------------------------------

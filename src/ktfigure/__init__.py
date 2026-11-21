@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import tkinter as tk
+import tkinter.font as tkfont
 
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -99,30 +100,30 @@ SEABORN_STYLES = ["whitegrid", "darkgrid", "white", "dark", "ticks"]
 # Themes
 # ---------------------------------------------------------------------------
 THEME_LIGHT = {
-    "tb": "#f8faf8",
-    "btn": "#eaf5ee",
+    "tb": "#faf9f7",
+    "btn": "#ffffff",
     "btn_fg": "#172d35",
-    "btn_hover": "#dcece3",
-    "btn_press": "#c9ddd3",
-    "sep": "#dce8e2",
-    "canvas": "#536a70",
+    "btn_hover": "#eaf5ee",
+    "btn_press": "#dcece3",
+    "sep": "#e4e3df",
+    "canvas": "#f8f8f6",
     "accent": "#167465",
     "status_fg": "#536a70",
     "panel_bg": "#ffffff",
     "field": "#ffffff",
 }
 THEME_DARK = {
-    "tb": "#172d35",
-    "btn": "#29454b",
-    "btn_fg": "#e4f1eb",
-    "btn_hover": "#365a5c",
-    "btn_press": "#416a68",
-    "sep": "#365357",
-    "canvas": "#263d41",
+    "tb": "#202729",
+    "btn": "#353e3e",
+    "btn_fg": "#edf2f0",
+    "btn_hover": "#454f4f",
+    "btn_press": "#566161",
+    "sep": "#4c5756",
+    "canvas": "#191e20",
     "accent": "#8bd5bb",
-    "status_fg": "#c1d5cd",
-    "panel_bg": "#1d3539",
-    "field": "#29454b",
+    "status_fg": "#bbc9c5",
+    "panel_bg": "#2b3333",
+    "field": "#353e3e",
 }
 ACTIVE_COLOR = "#167465"
 SEABORN_PALETTES = [
@@ -243,10 +244,10 @@ def bind_mousewheel(
 
 
 # ---------------------------------------------------------------------------
-# StyledButton  –  flat Frame+Label button with hover/press colours
+# StyledButton – rounded toolbar button with hover/press colours
 # ---------------------------------------------------------------------------
 class StyledButton(tk.Frame):
-    """A flat button built from tk.Frame + tk.Label — no Canvas, cross-platform."""
+    """A rounded toolbar button with a label and canvas-drawn background."""
 
     def __init__(
         self,
@@ -257,20 +258,18 @@ class StyledButton(tk.Frame):
         fg=THEME_LIGHT["btn_fg"],
         hover_bg=THEME_LIGHT["btn_hover"],
         press_bg=THEME_LIGHT["btn_press"],
-        canvas_bg=THEME_LIGHT["tb"],  # ignored – kept for API compat
-        padx=13,
-        pady=7,
-        font=("", 9),
+        canvas_bg=THEME_LIGHT["tb"],
+        padx=9,
+        pady=4,
+        font="TkDefaultFont",
         **kw,
     ):
         super().__init__(
             parent,
-            bg=bg,
+            bg=canvas_bg,
             cursor="arrow",
             bd=0,
-            highlightthickness=1,
-            highlightbackground=bg,
-            highlightcolor=bg,
+            highlightthickness=0,
             **kw,
         )
         self._bg = bg
@@ -279,8 +278,12 @@ class StyledButton(tk.Frame):
         self._command = command
         self._is_active = False  # Track if button is in active mode
 
+        self._surface = tk.Canvas(
+            self, bg=canvas_bg, bd=0, highlightthickness=0, takefocus=True
+        )
+        self._surface.pack()
         self._lbl = tk.Label(
-            self,
+            self._surface,
             text=text,
             bg=bg,
             fg=fg,
@@ -289,9 +292,20 @@ class StyledButton(tk.Frame):
             pady=pady,
             cursor="arrow",
         )
-        self._lbl.pack()
+        width = self._lbl.winfo_reqwidth() + 8
+        height = self._lbl.winfo_reqheight() + 4
+        self._surface.configure(width=width, height=height)
+        radius = min(9, height // 2)
+        self._shape = self._surface.create_polygon(
+            0, radius, 0, 0, radius, 0, width - radius, 0,
+            width, 0, width, radius, width, height - radius,
+            width, height, width - radius, height, radius, height,
+            0, height, 0, height - radius,
+            smooth=True, splinesteps=16, fill=bg, outline="",
+        )
+        self._lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-        for widget in (self, self._lbl):
+        for widget in (self._surface, self._lbl):
             widget.bind("<Enter>", lambda _e: self._on_enter())
             widget.bind("<Leave>", lambda _e: self._on_leave())
             widget.bind(
@@ -299,6 +313,19 @@ class StyledButton(tk.Frame):
                 lambda _e: self._set_bg(self._press_bg) if not self._is_active else None,
             )
             widget.bind("<ButtonRelease-1>", self._on_release)
+        self._surface.bind("<Return>", self._on_release)
+        self._surface.bind("<space>", self._on_release)
+        self._surface.bind("<FocusIn>", lambda _e: self._focus(True))
+        self._surface.bind("<FocusOut>", lambda _e: self._focus(False))
+
+    def _focus(self, focused):
+        self._surface.itemconfigure(
+            self._shape, outline=ACTIVE_COLOR if focused else "", width=2
+        )
+
+    def _set_container_bg(self, color):
+        self.configure(bg=color)
+        self._surface.configure(bg=color)
 
     def _on_enter(self):
         """Hover: only change bg if not active."""
@@ -313,7 +340,7 @@ class StyledButton(tk.Frame):
             self._set_bg(self._bg)
 
     def _set_bg(self, color):
-        self.configure(bg=color, highlightbackground=color, highlightcolor=color)
+        self._surface.itemconfigure(self._shape, fill=color)
         self._lbl.configure(bg=color)
 
     def _on_release(self, _e):
@@ -321,6 +348,119 @@ class StyledButton(tk.Frame):
             self._set_bg(self._hover_bg)
         if self._command:
             self._command()
+
+
+def _style_scrollbars(root, style, colors):
+    """Use slim, arrowless scrollbars while retaining ttk's native drag behavior."""
+    if not hasattr(root, "_scrollbar_images"):
+        root._scrollbar_images = [
+            tk.PhotoImage(master=root, width=12, height=12) for _ in range(2)
+        ]
+        normal, active = root._scrollbar_images
+        for orientation in ("Vertical", "Horizontal"):
+            element = f"Modern.{orientation}.Scrollbar.thumb"
+            style.element_create(
+                element, "image", normal, ("active", active),
+                border=(5, 5, 5, 5), sticky="nsew",
+            )
+            style.layout(
+                f"{orientation}.TScrollbar",
+                [(f"{orientation}.Scrollbar.trough", {
+                    "sticky": "nswe",
+                    "children": [(element, {"sticky": "nswe"})],
+                })],
+            )
+
+    for image, color in zip(root._scrollbar_images, colors):
+        image.blank()
+        image.put(color, to=(3, 2, 9, 10))
+        image.put(color, to=(2, 3, 10, 9))
+
+
+def _style_controls(root, style, theme):
+    """Draw stretchable rounded backgrounds for ttk controls."""
+    if not hasattr(root, "_control_images"):
+        root._control_images = {
+            name: tk.PhotoImage(master=root, width=16, height=16)
+            for name in ("button", "hover", "pressed", "field", "focus", "up", "down")
+        }
+        images = root._control_images
+        style.element_create(
+            "Modern.Button.border", "image", images["button"],
+            ("pressed", images["pressed"]), ("active", images["hover"]),
+            border=6, padding=3, sticky="nsew",
+        )
+        for control in ("Entry", "Combobox", "Spinbox"):
+            style.element_create(
+                f"Modern.{control}.field", "image", images["field"],
+                ("focus", images["focus"]), border=6, padding=4, sticky="nsew",
+            )
+        for control, direction in (
+            ("Combobox", "down"), ("Spinbox", "down"), ("Spinbox", "up")
+        ):
+            style.element_create(
+                f"Modern.{control}.{direction}arrow", "image", images[direction],
+                sticky="",
+            )
+        style.layout("TButton", [
+            ("Modern.Button.border", {"sticky": "nswe", "children": [
+                ("Button.focus", {"sticky": "nswe", "children": [
+                    ("Button.padding", {"sticky": "nswe", "children": [
+                        ("Button.label", {"sticky": "nswe"}),
+                    ]}),
+                ]}),
+            ]}),
+        ])
+        style.layout("TEntry", [
+            ("Modern.Entry.field", {"sticky": "nswe", "children": [
+                ("Entry.padding", {"sticky": "nswe", "children": [
+                    ("Entry.textarea", {"sticky": "nswe"}),
+                ]}),
+            ]}),
+        ])
+        style.layout("TCombobox", [
+            ("Modern.Combobox.field", {"sticky": "nswe", "children": [
+                ("Modern.Combobox.downarrow", {"side": "right"}),
+                ("Combobox.padding", {"sticky": "nswe", "children": [
+                    ("Combobox.textarea", {"sticky": "nswe"}),
+                ]}),
+            ]}),
+        ])
+        style.layout("TSpinbox", [
+            ("Modern.Spinbox.field", {"sticky": "nswe", "children": [
+                ("null", {"side": "right", "children": [
+                    ("Modern.Spinbox.uparrow", {"side": "top", "sticky": "e"}),
+                    ("Modern.Spinbox.downarrow", {"side": "bottom", "sticky": "e"}),
+                ]}),
+                ("Spinbox.padding", {"sticky": "nswe", "children": [
+                    ("Spinbox.textarea", {"sticky": "nswe"}),
+                ]}),
+            ]}),
+        ])
+
+    colors = {
+        "button": (theme["btn"], theme["btn"]),
+        "hover": (theme["btn_hover"], theme["btn_hover"]),
+        "pressed": (theme["btn_press"], theme["btn_press"]),
+        "field": (theme["field"], theme["sep"]),
+        "focus": (theme["field"], theme["accent"]),
+    }
+    for name, (fill, border) in colors.items():
+        image = root._control_images[name]
+        image.blank()
+        for y in range(16):
+            inset = (3, 2, 1, 0)[min(y, 15 - y, 3)]
+            image.put(border, to=(inset, y, 16 - inset, y + 1))
+            if 1 <= y <= 14:
+                inner = (4, 3, 2, 1)[min(y - 1, 14 - y, 3)]
+                image.put(fill, to=(inner, y, 16 - inner, y + 1))
+    for direction in ("up", "down"):
+        image = root._control_images[direction]
+        image.blank()
+        for row in range(4):
+            width = 2 * row + 1
+            y = 6 + (row if direction == "up" else 3 - row)
+            image.put(theme["btn_fg"], to=(8 - row, y, 8 - row + width, y + 1))
 
 
 # ---------------------------------------------------------------------------
@@ -1019,7 +1159,7 @@ class PlotConfigDialog(tk.Toplevel):
 # ---------------------------------------------------------------------------
 class AestheticsPanel(ttk.Frame):
     def __init__(self, parent, on_update):
-        super().__init__(parent, padding=6)
+        super().__init__(parent, padding=10)
         self._block = None
         self._on_update = on_update
         self._vars = {}
@@ -1070,7 +1210,7 @@ class AestheticsPanel(ttk.Frame):
         self._placeholder = ttk.Label(
             self,
             text="← Select a plot block\nto edit its style",
-            foreground="#999",
+            style="Muted.TLabel",
             justify="center",
         )
         self._placeholder.pack(expand=True)
@@ -1108,7 +1248,7 @@ class AestheticsPanel(ttk.Frame):
         def section(txt):
             ttk.Separator(self._inner, orient="horizontal").pack(fill="x", pady=(10, 0))
             ttk.Label(
-                self._inner, text=txt.upper(), font=("", 8, "bold"), foreground="#888"
+                self._inner, text=txt.upper(), style="Section.TLabel"
             ).pack(anchor="w", pady=(4, 2))
 
         def row(lbl, w_func):
@@ -1324,12 +1464,12 @@ class AestheticsPanel(ttk.Frame):
         ttk.Label(
             self._shape_section,
             text="(select a shape to edit)",
-            foreground="#999",
+            style="Muted.TLabel",
         ).pack(anchor="w")
 
         # ---- Hue Colours ----
         section("Hue Colours")
-        ttk.Label(self._inner, text="Custom colour per group:", foreground="#556").pack(
+        ttk.Label(self._inner, text="Custom colour per group:", style="Muted.TLabel").pack(
             anchor="w", pady=(0, 2)
         )
         self._hue_color_frame = ttk.Frame(self._inner)
@@ -1337,7 +1477,7 @@ class AestheticsPanel(ttk.Frame):
         ttk.Label(
             self._hue_color_frame,
             text="(no hue column selected)",
-            foreground="#999",
+            style="Muted.TLabel",
         ).pack(anchor="w")
         self._hue_color_map: dict = {}  # {str(value): hex_color}
 
@@ -1570,7 +1710,7 @@ class AestheticsPanel(ttk.Frame):
         ttk.Label(
             self._shape_section,
             text="(select a shape to edit)",
-            foreground="#999",
+            style="Muted.TLabel",
         ).pack(anchor="w")
 
     def load_text(self, text_obj, redraw_callback):
@@ -1779,7 +1919,7 @@ class AestheticsPanel(ttk.Frame):
             ttk.Label(
                 self._hue_color_frame,
                 text="(no hue column selected)",
-                foreground="#999",
+                style="Muted.TLabel",
             ).pack(anchor="w")
             self._hue_color_map = {}
             return
@@ -1926,7 +2066,7 @@ class AestheticsPanel(ttk.Frame):
     def _add_obj_size_controls(self, parent, obj, redraw_callback):
         """Append width/height/unit/lock controls to *parent* for a shape or text obj."""
         ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=(10, 2))
-        ttk.Label(parent, text="SIZE", font=("", 8, "bold"), foreground="#888").pack(
+        ttk.Label(parent, text="SIZE", style="Section.TLabel").pack(
             anchor="w", pady=(0, 2)
         )
 
@@ -2455,6 +2595,12 @@ class KTFigure:
         _all_tbs: list[tk.Frame] = []  # toolbar row frames
         _all_seps: list[tk.Frame] = []  # separator frames
         _all_btns: list[StyledButton] = []  # every normal (non-coloured) tbtn
+        _toolbar_btns: list[StyledButton] = []
+        _export_btns: list[StyledButton] = []
+        toolbar_font = (
+            tkfont.nametofont("TkDefaultFont", root=self.root).actual("family"),
+            9,
+        )
 
         def tbtn(
             parent,
@@ -2475,22 +2621,23 @@ class KTFigure:
                 hover_bg=hover_bg or TC["btn_hover"],
                 press_bg=press_bg or TC["btn_press"],
                 canvas_bg=TB_BG,
-                padx=13,
-                pady=7,
-                font=("", 9),
+                padx=6,
+                pady=3,
+                font=toolbar_font,
             )
-            b.pack(side="left", padx=4, pady=8)
+            b.pack(side="left", padx=3, pady=4)
+            _toolbar_btns.append(b)
             if _themed:
                 _all_btns.append(b)
             return b
 
         def sep(parent):
             f = tk.Frame(parent, bg=TC["sep"], width=1)
-            f.pack(side="left", fill="y", padx=2, pady=12)
+            f.pack(side="left", fill="y", padx=3, pady=8)
             _all_seps.append(f)
 
         # Row 1: Select, Plot | Edit, Delete | PNG, PDF, SVG, Help | Theme toggle
-        tb1 = tk.Frame(self.root, bg=TB_BG, height=52)
+        tb1 = tk.Frame(self.root, bg=TB_BG, height=40)
         tb1.pack(side="top", fill="x")
         tb1.pack_propagate(False)
         _all_tbs.append(tb1)
@@ -2510,41 +2657,41 @@ class KTFigure:
             _themed=False,
         )
         sep(tb1)
-        tbtn(
+        _export_btns.append(tbtn(
             tb1,
             "💾  PNG",
             self._export_png,
-            bg="#eaf5ee",
+            bg=TC["btn"],
             fg="#11695c",
-            hover_bg="#dcece3",
-            press_bg="#c9ddd3",
+            hover_bg=TC["btn_hover"],
+            press_bg=TC["btn_press"],
             _themed=False,
-        )
-        tbtn(
+        ))
+        _export_btns.append(tbtn(
             tb1,
             "📄  PDF",
             self._export_pdf,
-            bg="#eaf5ee",
+            bg=TC["btn"],
             fg="#11695c",
-            hover_bg="#dcece3",
-            press_bg="#c9ddd3",
+            hover_bg=TC["btn_hover"],
+            press_bg=TC["btn_press"],
             _themed=False,
-        )
-        tbtn(
+        ))
+        _export_btns.append(tbtn(
             tb1,
             "📐  SVG",
             self._export_svg,
-            bg="#eaf5ee",
+            bg=TC["btn"],
             fg="#11695c",
-            hover_bg="#dcece3",
-            press_bg="#c9ddd3",
+            hover_bg=TC["btn_hover"],
+            press_bg=TC["btn_press"],
             _themed=False,
-        )
+        ))
         tbtn(tb1, "❓  Help", self._show_help)
 
         # Sliding theme toggle — always at the far right of row 1
         self._theme_toggle = ThemeToggle(tb1, command=self._on_theme_click, bg=TB_BG)
-        self._theme_toggle.pack(side="right", padx=12, pady=12)
+        self._theme_toggle.pack(side="right", padx=8, pady=4)
 
         # Mode label — just to the left of the toggle
         self._mode_lbl = tk.Label(
@@ -2553,7 +2700,7 @@ class KTFigure:
             bg=TB_BG,
             fg=TC["accent"],
             font=("", 9, "bold"),
-            padx=14,
+            padx=8,
         )
         self._mode_lbl.pack(side="right")
 
@@ -2563,7 +2710,7 @@ class KTFigure:
         _all_seps.append(_b1)
 
         # Row 2: Edit commands, shapes, and text
-        tb2 = tk.Frame(self.root, bg=TB_BG, height=52)
+        tb2 = tk.Frame(self.root, bg=TB_BG, height=40)
         tb2.pack(side="top", fill="x")
         tb2.pack_propagate(False)
         _all_tbs.append(tb2)
@@ -2586,7 +2733,7 @@ class KTFigure:
         _all_seps.append(_b2)
 
         # Row 3: All 7 alignment buttons
-        tb3 = tk.Frame(self.root, bg=TB_BG, height=52)
+        tb3 = tk.Frame(self.root, bg=TB_BG, height=40)
         tb3.pack(side="top", fill="x")
         tb3.pack_propagate(False)
         _all_tbs.append(tb3)
@@ -2610,8 +2757,9 @@ class KTFigure:
             width=5,
             font=("", 9),
             takefocus=False,
+            style="Toolbar.TCombobox",
         )
-        self._spacing_combo.pack(side="left", padx=(0, 4), pady=8)
+        self._spacing_combo.pack(side="left", padx=(0, 4), pady=4)
         self._spacing_combo.bind(
             "<<ComboboxSelected>>",
             lambda _e: (self._apply_spacing_entry(), self._cv.focus_set()),
@@ -2782,6 +2930,7 @@ class KTFigure:
             width=5,
             font=("", 9),
             takefocus=False,
+            style="Toolbar.TCombobox",
         )
         self._zoom_combo.pack(side="left")
         self._zoom_combo.bind(
@@ -2801,16 +2950,11 @@ class KTFigure:
         self._zoom_entry = self._zoom_combo  # alias for backward compat
 
         # ── center-view button (next to zoom) ──────────────────────────────
-        self._btn_center = tk.Button(
+        self._btn_center = ttk.Button(
             zoom_frame,
             text="⊙",
             width=2,
-            bd=0,
-            relief="flat",
-            bg=TC["btn"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 9),
+            style="Compact.TButton",
             command=self._center_view,
             cursor="arrow",
         )
@@ -2820,48 +2964,33 @@ class KTFigure:
         ab_right = tk.Frame(self._status_bar, bg=TC["tb"])
         ab_right.pack(side="right", padx=(4, 8), pady=2)
 
-        self._btn_del_board = tk.Button(
+        self._btn_del_board = ttk.Button(
             ab_right,
             text="×",
-            width=1,
-            bd=0,
-            relief="flat",
-            bg=TC["btn"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 7),
+            width=2,
+            style="Compact.TButton",
             command=self._delete_artboard,
             cursor="arrow",
             state="disabled",
         )
         self._btn_del_board.pack(side="right", padx=(1, 0))
 
-        self._btn_add_board = tk.Button(
+        self._btn_add_board = ttk.Button(
             ab_right,
             text="+",
-            width=1,
-            bd=0,
-            relief="flat",
-            bg=TC["btn"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 7),
+            width=2,
+            style="Compact.TButton",
             command=self._add_artboard,
             cursor="arrow",
         )
         self._btn_add_board.pack(side="right", padx=(1, 2))
 
         self._board_var = tk.StringVar(value="1")
-        self._board_btn = tk.Button(
+        self._board_btn = ttk.Button(
             ab_right,
             textvariable=self._board_var,
             width=3,
-            bd=1,
-            relief="solid",
-            bg="white",
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-            font=("", 9),
+            style="Compact.TButton",
             cursor="arrow",
             command=self._show_board_menu,
         )
@@ -2892,6 +3021,8 @@ class KTFigure:
             "tbs": _all_tbs,
             "seps": _all_seps,
             "btns": _all_btns,
+            "toolbar_btns": _toolbar_btns,
+            "export_btns": _export_btns,
         }
 
         # Apply initial light-mode ttk styles so dialogs (PlotConfigDialog etc.)
@@ -2912,7 +3043,7 @@ class KTFigure:
                 oy + 5,
                 ox + w + 5,
                 oy + h + 5,
-                fill="#222",
+                fill="#101415" if self._is_dark else "#c5d0ca",
                 outline="",
                 tags="bg",
             )
@@ -2935,7 +3066,7 @@ class KTFigure:
                 ox + w / 2,
                 label_y,
                 text=f"Page {idx + 1}",
-                fill="#888888",
+                fill=(THEME_DARK if self._is_dark else THEME_LIGHT)["status_fg"],
                 font=("", max(7, round(9 * z))),
                 tags="ruler",
             )
@@ -4119,12 +4250,8 @@ class KTFigure:
                 btn._hover_bg = "#11695c"
                 btn._press_bg = "#0a463e"
                 btn._is_active = True
-                btn.configure(
-                    bg=ACTIVE_COLOR,
-                    highlightbackground=ACTIVE_COLOR,
-                    highlightcolor=ACTIVE_COLOR,
-                )
-                btn._lbl.configure(bg=ACTIVE_COLOR, fg="white")
+                btn._set_bg(ACTIVE_COLOR)
+                btn._lbl.configure(fg="white")
             else:
                 # Reset to default appearance using current theme colors
                 TC = THEME_DARK if self._is_dark else THEME_LIGHT
@@ -4132,12 +4259,8 @@ class KTFigure:
                 btn._hover_bg = TC["btn_hover"]
                 btn._press_bg = TC["btn_press"]
                 btn._is_active = False
-                btn.configure(
-                    bg=TC["btn"],
-                    highlightbackground=TC["btn"],
-                    highlightcolor=TC["btn"],
-                )
-                btn._lbl.configure(bg=TC["btn"], fg=TC["btn_fg"])
+                btn._set_bg(TC["btn"])
+                btn._lbl.configure(fg=TC["btn_fg"])
 
     def _on_theme_click(self):
         """Called when the user manually clicks the theme toggle."""
@@ -4173,6 +4296,9 @@ class KTFigure:
         for f in self._theme_widgets.get("seps", []):
             f.configure(bg=TC["sep"])
 
+        for btn in self._theme_widgets.get("toolbar_btns", []):
+            btn._set_container_bg(TC["tb"])
+
         # Normal themed buttons (non-coloured)
         for btn in self._theme_widgets.get("btns", []):
             if not btn._is_active:
@@ -4182,6 +4308,13 @@ class KTFigure:
                 btn._set_bg(TC["btn"])
                 btn._lbl.configure(fg=TC["btn_fg"])
 
+        for btn in self._theme_widgets.get("export_btns", []):
+            btn._bg, btn._hover_bg, btn._press_bg = (
+                TC["btn"], TC["btn_hover"], TC["btn_press"]
+            )
+            btn._set_bg(btn._bg)
+            btn._lbl.configure(fg=TC["accent"] if self._is_dark else "#11695c")
+
         # Mode label
         self._mode_lbl.configure(bg=TC["tb"], fg=TC["accent"])
 
@@ -4190,66 +4323,73 @@ class KTFigure:
         self._status_sep.configure(bg=TC["sep"])
         self._status_bar.configure(bg=TC["tb"])
 
-        # Zoom controls – the old separate buttons no longer exist; only the
-        # combobox, its container frame, and the center button need theming.
+        # Zoom and artboard control containers
         self._zoom_combo.master.configure(bg=TC["tb"])
-
-        # Center-view button
-        self._btn_center.configure(
-            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
-        )
-
-        # Artboard controls
-        self._btn_add_board.configure(
-            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
-        )
-        self._btn_del_board.configure(
-            bg=TC["btn"], fg=TC["btn_fg"], activebackground=TC["btn_hover"]
-        )
-        # _board_btn is a plain tk.Button styled to look like a combobox
-        self._board_btn.configure(
-            bg=TC["field"],
-            fg=TC["btn_fg"],
-            activebackground=TC["btn_hover"],
-        )
         self._board_btn.master.configure(bg=TC["tb"])
         self._rebuild_artboard_buttons()
 
         # Canvas outer frame and canvas itself
         self._canvas_outer.configure(bg=TC["canvas"])
         self._cv.configure(bg=TC["canvas"])
+        self._cv.itemconfigure("bg", fill="#101415" if self._is_dark else "#c5d0ca")
+        self._cv.itemconfigure("ruler", fill=TC["status_fg"])
 
         # Main container frame
         self._main_frame.configure(bg=TC["canvas"])
+        self._aes._canvas.configure(bg=TC["panel_bg"])
 
         # ttk theme for panels
-        style = ttk.Style()
+        style = ttk.Style(self.root)
         style.theme_use("clam")
         style.configure(
             ".", background=TC["panel_bg"], foreground=TC["btn_fg"],
-            bordercolor=TC["sep"],
+            bordercolor=TC["sep"], font="TkDefaultFont",
         )
+        _style_controls(self.root, style, TC)
         style.configure("TFrame", background=TC["panel_bg"])
         style.configure("TLabel", background=TC["panel_bg"], foreground=TC["btn_fg"])
+        style.configure("Muted.TLabel", foreground=TC["status_fg"])
+        style.configure(
+            "Section.TLabel", foreground=TC["accent"],
+            font=(tkfont.nametofont("TkDefaultFont", root=self.root).actual("family"), 8, "bold"),
+        )
         for widget_style in ("TEntry", "TCombobox", "TSpinbox"):
             style.configure(
-                widget_style, fieldbackground=TC["field"], foreground=TC["btn_fg"]
+                widget_style, fieldbackground=TC["field"], foreground=TC["btn_fg"],
+                background=TC["panel_bg"], arrowcolor=TC["btn_fg"], padding=(3, 2),
             )
+        style.configure("Toolbar.TCombobox", background=TC["tb"])
         style.map("TCombobox", fieldbackground=[("readonly", TC["field"])])
+        style.map("TCombobox", foreground=[("disabled", TC["status_fg"])])
         style.configure(
             "TCheckbutton", background=TC["panel_bg"], foreground=TC["btn_fg"]
         )
-        style.configure("TButton", background=TC["btn"], foreground=TC["btn_fg"])
+        style.configure(
+            "TButton", background=TC["panel_bg"], foreground=TC["btn_fg"],
+            padding=(10, 5), relief="flat", borderwidth=0,
+        )
         style.map(
             "TButton",
-            background=[("pressed", TC["btn_press"]), ("active", TC["btn_hover"])],
+            foreground=[("disabled", TC["status_fg"])],
         )
+        style.map("TButton", background=[])
+        style.configure("Compact.TButton", padding=(4, 2), background=TC["tb"])
         style.configure("TPanedwindow", background=TC["canvas"])
         style.configure("TSeparator", background=TC["sep"])
-        style.configure("Horizontal.TScrollbar", background=TC["btn"])
-        style.configure("Vertical.TScrollbar", background=TC["btn"])
+        _style_scrollbars(
+            self.root, style,
+            ("#74817f", "#8bd5bb") if self._is_dark else ("#9db8ac", "#6e9a8b"),
+        )
+        for orientation in ("Horizontal", "Vertical"):
+            style.configure(
+                f"{orientation}.TScrollbar", troughcolor=TC["panel_bg"],
+                borderwidth=0, relief="flat",
+            )
         style.configure("TNotebook", background=TC["panel_bg"])
-        style.configure("TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"])
+        style.configure(
+            "TNotebook.Tab", background=TC["btn"], foreground=TC["btn_fg"],
+            padding=(12, 6), borderwidth=0,
+        )
         style.map(
             "TNotebook.Tab",
             background=[("selected", TC["panel_bg"])],
