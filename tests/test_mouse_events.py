@@ -356,6 +356,81 @@ class TestMouseUp:
             pump(self.root)
             mock_config.assert_called_once()
 
+    @pytest.mark.parametrize("close", ["cancel", "window"])
+    def test_cancel_new_plot_preserves_canvas_and_history(self, close):
+        existing = PlotBlock(300, 300, 500, 500)
+        self.app._blocks.append(existing)
+        self.app._draw_empty_block(existing)
+        self.app._undo()
+        undo_before = len(self.app._undo_stack)
+        redo_before = len(self.app._redo_stack)
+
+        def close_dialog(dlg):
+            dlg._df = pd.DataFrame({"x": [1, 2]})
+            if close == "cancel":
+                buttons = [
+                    widget for frame in dlg.winfo_children()
+                    for widget in frame.winfo_children()
+                    if widget.winfo_class() == "TButton"
+                    and widget.cget("text") == "Cancel"
+                ]
+                buttons[0].invoke()
+            else:
+                dlg.tk.call(dlg.protocol("WM_DELETE_WINDOW"))
+
+        ev_up = self._do_draw(self.app._mode_draw, 50, 50, 250, 200)
+        with patch.object(self.root, "wait_window", side_effect=close_dialog):
+            self.app._mouse_up(ev_up)
+
+        assert self.app._blocks == []
+        assert not self.app._cv.find_withtag("block")
+        assert len(self.app._undo_stack) == undo_before
+        assert len(self.app._redo_stack) == redo_before
+        self.app._redo()
+        assert len(self.app._blocks) == 1
+        assert self.app._blocks[0].bid == existing.bid
+
+    def test_apply_new_plot_undo_does_not_restore_placeholder(self):
+        def apply_dialog(dlg):
+            dlg._df = pd.DataFrame({"x": [1, 2], "y": [2, 3]})
+            dlg._col_x.set("x")
+            dlg._col_y.set("y")
+            dlg._apply()
+
+        ev_up = self._do_draw(self.app._mode_draw, 50, 50, 250, 200)
+        with patch.object(self.root, "wait_window", side_effect=apply_dialog):
+            self.app._mouse_up(ev_up)
+        assert len(self.app._blocks) == 1
+        assert self.app._blocks[0].image_id is not None
+        self.app._undo()
+        assert self.app._blocks == []
+        assert not self.app._cv.find_withtag("block")
+        self.app._redo()
+        assert len(self.app._blocks) == 1
+        assert self.app._blocks[0].image_id is not None
+
+    def test_cancel_edit_keeps_existing_plot(self, sample_df):
+        block = PlotBlock(50, 50, 250, 200)
+        block.df = sample_df
+        block.plot_type = "scatter"
+        block.col_x = "x"
+        block.col_y = "y"
+        self.app._blocks.append(block)
+        self.app._draw_empty_block(block)
+        self.app._render_block(block)
+        image_id = block.image_id
+
+        def cancel_dialog(dlg):
+            dlg._col_x.set("cat")
+            dlg.destroy()
+
+        with patch.object(self.root, "wait_window", side_effect=cancel_dialog):
+            self.app._open_config(block, is_edit=True)
+        assert self.app._blocks == [block]
+        assert block.col_x == "x"
+        assert block.image_id == image_id
+        assert self.app._cv.type(image_id) == "image"
+
     def test_mouse_up_completes_block_drag(self):
         block = PlotBlock(100, 100, 300, 250)
         self.app._blocks.append(block)

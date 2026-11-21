@@ -5773,10 +5773,7 @@ class KTFigure:
                 if w < 30 or h < 30:
                     self._set_status("Box too small — please drag at least 30 × 30 px.")
                     return
-                self._save_state()  # Save before creating
                 block = PlotBlock(x1, y1, x2, y2)
-                self._blocks.append(block)
-                self._draw_empty_block(block)
                 self._open_config(block, is_edit=False)
             elif self._mode == "draw_line":
                 self._save_state()  # Save before creating
@@ -6105,6 +6102,9 @@ class KTFigure:
         self.root.wait_window(dlg)
         if dlg.result:
             self._save_state()  # Save after configuring plot
+            if not is_edit:
+                self._blocks.append(block)
+                self._draw_empty_block(block)
             self._render_block(block)
             self._select_block(block)
             self._mode_select()
