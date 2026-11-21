@@ -1,103 +1,91 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120">
-  <style>
-    .frame { fill: #fff; stroke: #b6d2c4; stroke-width: 2; }
-    .accent { fill: #eaf5ee; stroke: #167465; stroke-width: 2; }
-    .blue { fill: #0173b2; }
-    .orange { fill: #de8f05; }
-    .ink { fill: #172d35; }
-    .line { fill: none; stroke: #536a70; stroke-width: 2; }
-    .guide { fill: none; stroke: #167465; stroke-width: 2; }
-    .text { fill: #172d35; font: 11px Arial, Helvetica, sans-serif; }
-    .small { fill: #536a70; font: 9px Arial, Helvetica, sans-serif; }
-    .bold { fill: #172d35; font: bold 11px Arial, Helvetica, sans-serif; }
-  </style>
   <symbol id="canvas" viewBox="0 0 240 120">
-    <rect class="frame" x="14" y="12" width="212" height="96" rx="4"/>
-    <rect class="accent" x="23" y="20" width="43" height="18" rx="3"/><text class="bold" x="32" y="33">Plot</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="14" y="12" width="212" height="96" rx="4"/>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="23" y="20" width="43" height="18" rx="3"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="32" y="33">Plot</text>
     <rect x="82" y="48" width="113" height="47" fill="#f8faf8" stroke="#167465" stroke-width="2" stroke-dasharray="4 3"/>
-    <path class="guide" d="M92 57l11 11m-11-11v8m0-8h8M185 86l-11-11m11 11v-8m0 8h-8"/>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M92 57l11 11m-11-11v8m0-8h8M185 86l-11-11m11 11v-8m0 8h-8"/>
   </symbol>
   <symbol id="browse" viewBox="0 0 240 120">
-    <rect class="frame" x="20" y="13" width="200" height="94" rx="5"/>
-    <text class="bold" x="32" y="34">Data</text><rect class="accent" x="31" y="44" width="86" height="25" rx="3"/><text class="text" x="43" y="61">Browse…</text>
-    <path class="guide" d="M122 56h26m-7-5 7 5-7 5"/><path class="frame" d="M158 31h30l12 12v41h-42z"/><path class="line" d="M188 31v12h12"/><text class="bold" x="165" y="65">CSV</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="20" y="13" width="200" height="94" rx="5"/>
+    <text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="32" y="34">Data</text><rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="31" y="44" width="86" height="25" rx="3"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" x="43" y="61">Browse…</text>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M122 56h26m-7-5 7 5-7 5"/><path fill="#fff" stroke="#b6d2c4" stroke-width="2" d="M158 31h30l12 12v41h-42z"/><path fill="none" stroke="#536a70" stroke-width="2" d="M188 31v12h12"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="165" y="65">CSV</text>
   </symbol>
   <symbol id="scatter-map" viewBox="0 0 240 120">
-    <rect class="frame" x="12" y="12" width="216" height="96" rx="5"/>
-    <text class="bold" x="23" y="33">scatter</text><text class="small" x="23" y="52">X → temperature</text><text class="small" x="23" y="69">Y → sales</text><text class="small" x="23" y="86">Hue → season</text>
-    <path class="line" d="M153 28v58h58"/><g class="blue"><circle cx="164" cy="73" r="3"/><circle cx="184" cy="59" r="3"/></g><g class="orange"><circle cx="174" cy="65" r="3"/><circle cx="200" cy="45" r="3"/></g>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="12" y="12" width="216" height="96" rx="5"/>
+    <text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="23" y="33">scatter</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="23" y="52">X → temperature</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="23" y="69">Y → sales</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="23" y="86">Hue → season</text>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M153 28v58h58"/><g fill="#0173b2"><circle cx="164" cy="73" r="3"/><circle cx="184" cy="59" r="3"/></g><g fill="#de8f05"><circle cx="174" cy="65" r="3"/><circle cx="200" cy="45" r="3"/></g>
   </symbol>
   <symbol id="preview" viewBox="0 0 240 120">
-    <rect class="frame" x="15" y="13" width="210" height="94" rx="5"/>
-    <path class="line" d="M37 29v52h93"/><g class="blue"><circle cx="49" cy="69" r="3"/><circle cx="74" cy="54" r="3"/><circle cx="103" cy="39" r="3"/></g>
-    <rect class="accent" x="148" y="57" width="58" height="26" rx="3"/><text class="bold" x="160" y="74">Apply</text><text class="small" x="150" y="42">Preview</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="15" y="13" width="210" height="94" rx="5"/>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M37 29v52h93"/><g fill="#0173b2"><circle cx="49" cy="69" r="3"/><circle cx="74" cy="54" r="3"/><circle cx="103" cy="39" r="3"/></g>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="148" y="57" width="58" height="26" rx="3"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="160" y="74">Apply</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="150" y="42">Preview</text>
   </symbol>
   <symbol id="edit" viewBox="0 0 240 120">
-    <rect class="frame" x="16" y="14" width="208" height="92" rx="5"/>
-    <path class="line" d="M37 30v52h83"/><path class="guide" d="M44 70l22-17 20 7 25-26"/>
-    <rect class="accent" x="141" y="45" width="66" height="26" rx="3"/><text class="bold" x="150" y="62">Edit plot</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="16" y="14" width="208" height="92" rx="5"/>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M37 30v52h83"/><path fill="none" stroke="#167465" stroke-width="2" d="M44 70l22-17 20 7 25-26"/>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="141" y="45" width="66" height="26" rx="3"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="150" y="62">Edit plot</text>
   </symbol>
   <symbol id="box-map" viewBox="0 0 240 120">
-    <rect class="frame" x="13" y="13" width="214" height="94" rx="5"/>
-    <text class="bold" x="25" y="33">box</text><text class="small" x="25" y="53">X → season</text><text class="small" x="25" y="70">Y → sales</text><text class="small" x="25" y="87">Hue → (none)</text>
-    <path class="line" d="M164 31v55h40M181 36v43m-9-33h18v22h-18zm0 11h18"/>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="13" y="13" width="214" height="94" rx="5"/>
+    <text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="25" y="33">box</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="25" y="53">X → season</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="25" y="70">Y → sales</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="25" y="87">Hue → (none)</text>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M164 31v55h40M181 36v43m-9-33h18v22h-18zm0 11h18"/>
   </symbol>
   <symbol id="box-result" viewBox="0 0 240 120">
-    <rect class="frame" x="13" y="13" width="214" height="94" rx="5"/>
-    <text class="bold" x="35" y="33">Sales by season</text><path class="line" d="M37 41v42h152M76 45v32m-10-25h20v17H66zm0 8h20M143 43v35m-10-28h20v18h-20zm0 8h20"/>
-    <text class="small" x="91" y="98">Season</text><text class="small" x="42" y="54">Sales</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="13" y="13" width="214" height="94" rx="5"/>
+    <text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="35" y="33">Sales by season</text><path fill="none" stroke="#536a70" stroke-width="2" d="M37 41v42h152M76 45v32m-10-25h20v17H66zm0 8h20M143 43v35m-10-28h20v18h-20zm0 8h20"/>
+    <text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="91" y="98">Season</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="42" y="54">Sales</text>
   </symbol>
   <symbol id="groups" viewBox="0 0 240 120">
-    <rect class="accent" x="20" y="24" width="100" height="27" rx="4"/><text class="text" x="35" y="42">Control</text>
-    <rect x="20" y="70" width="100" height="27" rx="4" fill="#fff4e3" stroke="#b87700" stroke-width="2"/><text class="text" x="35" y="88">Treatment</text>
-    <text class="small" x="141" y="40">Group 1</text><text class="small" x="141" y="86">Group 2</text>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="20" y="24" width="100" height="27" rx="4"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" x="35" y="42">Control</text>
+    <rect x="20" y="70" width="100" height="27" rx="4" fill="#fff4e3" stroke="#b87700" stroke-width="2"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" x="35" y="88">Treatment</text>
+    <text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="141" y="40">Group 1</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="141" y="86">Group 2</text>
   </symbol>
   <symbol id="sampling" viewBox="0 0 240 120">
-    <g class="frame"><rect x="15" y="22" width="50" height="25" rx="3"/><rect x="94" y="22" width="50" height="25" rx="3"/><rect x="173" y="22" width="50" height="25" rx="3"/><rect x="15" y="70" width="50" height="25" rx="3"/><rect x="94" y="70" width="50" height="25" rx="3"/><rect x="173" y="70" width="50" height="25" rx="3"/></g>
-    <g class="text" text-anchor="middle"><text x="40" y="39">0 h</text><text x="119" y="39">24 h</text><text x="198" y="39">48 h</text><text x="40" y="87">0 h</text><text x="119" y="87">24 h</text><text x="198" y="87">48 h</text></g>
-    <path class="guide" d="M65 34h27m-6-4 6 4-6 4m58-4h27m-6-4 6 4-6 4M65 82h27m-6-4 6 4-6 4m58-4h27m-6-4 6 4-6 4"/>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="15" y="22" width="50" height="25" rx="3"/><rect x="94" y="22" width="50" height="25" rx="3"/><rect x="173" y="22" width="50" height="25" rx="3"/><rect x="15" y="70" width="50" height="25" rx="3"/><rect x="94" y="70" width="50" height="25" rx="3"/><rect x="173" y="70" width="50" height="25" rx="3"/></g>
+    <g fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle"><text x="40" y="39">0 h</text><text x="119" y="39">24 h</text><text x="198" y="39">48 h</text><text x="40" y="87">0 h</text><text x="119" y="87">24 h</text><text x="198" y="87">48 h</text></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M65 34h27m-6-4 6 4-6 4m58-4h27m-6-4 6 4-6 4M65 82h27m-6-4 6 4-6 4m58-4h27m-6-4 6 4-6 4"/>
   </symbol>
   <symbol id="labels" viewBox="0 0 240 120">
-    <rect class="accent" x="20" y="20" width="84" height="32" rx="3"/><rect class="frame" x="135" y="20" width="84" height="32" rx="3"/>
-    <rect class="accent" x="20" y="69" width="84" height="32" rx="3"/><rect class="frame" x="135" y="69" width="84" height="32" rx="3"/>
-    <g class="text" text-anchor="middle"><text x="62" y="40">Control</text><text x="177" y="40">0 h</text><text x="62" y="89">Treatment</text><text x="177" y="89">0 h</text></g>
-    <path class="guide" d="M104 36h29m-6-4 6 4-6 4M104 85h29m-6-4 6 4-6 4"/>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="20" y="20" width="84" height="32" rx="3"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="135" y="20" width="84" height="32" rx="3"/>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="20" y="69" width="84" height="32" rx="3"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="135" y="69" width="84" height="32" rx="3"/>
+    <g fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle"><text x="62" y="40">Control</text><text x="177" y="40">0 h</text><text x="62" y="89">Treatment</text><text x="177" y="89">0 h</text></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M104 36h29m-6-4 6 4-6 4M104 85h29m-6-4 6 4-6 4"/>
   </symbol>
   <symbol id="grid" viewBox="0 0 240 120">
-    <g class="frame"><rect x="18" y="16" width="58" height="36"/><rect x="91" y="16" width="58" height="36"/><rect x="164" y="16" width="58" height="36"/><rect x="18" y="68" width="58" height="36"/><rect x="91" y="68" width="58" height="36"/><rect x="164" y="68" width="58" height="36"/></g>
-    <g class="bold"><text x="26" y="31">A</text><text x="99" y="31">B</text><text x="172" y="31">C</text><text x="26" y="83">D</text><text x="99" y="83">E</text><text x="172" y="83">F</text></g>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="18" y="16" width="58" height="36"/><rect x="91" y="16" width="58" height="36"/><rect x="164" y="16" width="58" height="36"/><rect x="18" y="68" width="58" height="36"/><rect x="91" y="68" width="58" height="36"/><rect x="164" y="68" width="58" height="36"/></g>
+    <g fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold"><text x="26" y="31">A</text><text x="99" y="31">B</text><text x="172" y="31">C</text><text x="26" y="83">D</text><text x="99" y="83">E</text><text x="172" y="83">F</text></g>
   </symbol>
   <symbol id="align" viewBox="0 0 240 120">
-    <path class="guide" stroke-dasharray="4 3" d="M17 25h206M17 95h206"/>
-    <g class="frame"><rect x="23" y="25" width="48" height="70"/><rect x="96" y="25" width="48" height="70"/><rect x="169" y="25" width="48" height="70"/></g>
-    <path class="guide" d="M74 59h18m-14-4-4 4 4 4m10-8 4 4-4 4m58-4h18m-14-4-4 4 4 4m10-8 4 4-4 4"/>
+    <path fill="none" stroke="#167465" stroke-width="2" stroke-dasharray="4 3" d="M17 25h206M17 95h206"/>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="23" y="25" width="48" height="70"/><rect x="96" y="25" width="48" height="70"/><rect x="169" y="25" width="48" height="70"/></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M74 59h18m-14-4-4 4 4 4m10-8 4 4-4 4m58-4h18m-14-4-4 4 4 4m10-8 4 4-4 4"/>
   </symbol>
   <symbol id="key" viewBox="0 0 240 120">
-    <rect class="frame" x="17" y="27" width="206" height="78" rx="4"/><path class="line" d="M39 44v46h164"/>
-    <g class="blue"><circle cx="60" cy="74" r="4"/><circle cx="94" cy="59" r="4"/></g><g class="orange"><circle cx="134" cy="65" r="4"/><circle cx="183" cy="45" r="4"/></g>
-    <circle class="blue" cx="70" cy="14" r="4"/><text class="small" x="80" y="17">Group 1</text><circle class="orange" cx="150" cy="14" r="4"/><text class="small" x="160" y="17">Group 2</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="17" y="27" width="206" height="78" rx="4"/><path fill="none" stroke="#536a70" stroke-width="2" d="M39 44v46h164"/>
+    <g fill="#0173b2"><circle cx="60" cy="74" r="4"/><circle cx="94" cy="59" r="4"/></g><g fill="#de8f05"><circle cx="134" cy="65" r="4"/><circle cx="183" cy="45" r="4"/></g>
+    <circle fill="#0173b2" cx="70" cy="14" r="4"/><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="80" y="17">Group 1</text><circle fill="#de8f05" cx="150" cy="14" r="4"/><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="160" y="17">Group 2</text>
   </symbol>
   <symbol id="size" viewBox="0 0 240 120">
-    <rect class="frame" x="24" y="32" width="192" height="67" rx="3"/><path class="guide" d="M24 19h192m-5-5 5 5-5 5M29 14l-5 5 5 5"/>
-    <text class="bold" x="92" y="16">180 mm</text><text class="text" x="43" y="58">Aa</text><text class="small" x="44" y="77">Check at final size</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="24" y="32" width="192" height="67" rx="3"/><path fill="none" stroke="#167465" stroke-width="2" d="M24 19h192m-5-5 5 5-5 5M29 14l-5 5 5 5"/>
+    <text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="92" y="16">180 mm</text><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" x="43" y="58">Aa</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="44" y="77">Check at final size</text>
   </symbol>
   <symbol id="pipeline" viewBox="0 0 240 120">
-    <g class="frame"><rect x="76" y="7" width="88" height="20" rx="3"/><rect x="76" y="34" width="88" height="20" rx="3"/><rect x="17" y="63" width="84" height="20" rx="3"/><rect x="139" y="63" width="84" height="20" rx="3"/><rect x="76" y="92" width="88" height="20" rx="3"/></g>
-    <g class="small" text-anchor="middle"><text x="120" y="21">Data</text><text x="120" y="48">QC</text><text x="59" y="77">Method A</text><text x="181" y="77">Method B</text><text x="120" y="106">Compare</text></g>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="76" y="7" width="88" height="20" rx="3"/><rect x="76" y="34" width="88" height="20" rx="3"/><rect x="17" y="63" width="84" height="20" rx="3"/><rect x="139" y="63" width="84" height="20" rx="3"/><rect x="76" y="92" width="88" height="20" rx="3"/></g>
+    <g fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" text-anchor="middle"><text x="120" y="21">Data</text><text x="120" y="48">QC</text><text x="59" y="77">Method A</text><text x="181" y="77">Method B</text><text x="120" y="106">Compare</text></g>
   </symbol>
   <symbol id="branch" viewBox="0 0 240 120">
-    <rect class="accent" x="80" y="7" width="80" height="23" rx="3"/><rect class="frame" x="20" y="58" width="76" height="23" rx="3"/><rect class="frame" x="144" y="58" width="76" height="23" rx="3"/>
-    <text class="small" x="109" y="22">QC</text><text class="small" x="41" y="73">Method A</text><text class="small" x="165" y="73">Method B</text>
-    <path class="guide" d="M120 30v13H58v13m62-13h62v13M58 81v16h124V81M120 97v13"/>
+    <rect fill="#eaf5ee" stroke="#167465" stroke-width="2" x="80" y="7" width="80" height="23" rx="3"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="20" y="58" width="76" height="23" rx="3"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="144" y="58" width="76" height="23" rx="3"/>
+    <text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="109" y="22">QC</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="41" y="73">Method A</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="165" y="73">Method B</text>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M120 30v13H58v13m62-13h62v13M58 81v16h124V81M120 97v13"/>
   </symbol>
   <symbol id="takeaway" viewBox="0 0 240 120">
-    <rect class="frame" x="16" y="14" width="208" height="92" rx="5"/><text class="bold" x="30" y="37">What is the finding?</text>
-    <path class="line" d="M30 50h153M30 62h127M30 74h143"/><circle class="blue" cx="180" cy="83" r="5"/><circle class="orange" cx="199" cy="83" r="5"/>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="16" y="14" width="208" height="92" rx="5"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="30" y="37">What is the finding?</text>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M30 50h153M30 62h127M30 74h143"/><circle fill="#0173b2" cx="180" cy="83" r="5"/><circle fill="#de8f05" cx="199" cy="83" r="5"/>
   </symbol>
   <symbol id="story" viewBox="0 0 240 120">
-    <g class="frame"><rect x="12" y="22" width="60" height="32"/><rect x="90" y="22" width="60" height="32"/><rect x="168" y="22" width="60" height="32"/><rect x="12" y="73" width="60" height="32"/><rect x="90" y="73" width="60" height="32"/><rect x="168" y="73" width="60" height="32"/></g>
-    <g class="bold" text-anchor="middle"><text x="42" y="43">A</text><text x="120" y="43">B</text><text x="198" y="43">C</text><text x="42" y="94">D</text><text x="120" y="94">E</text><text x="198" y="94">F</text></g>
-    <path class="guide" d="M72 38h16m-5-4 5 4-5 4m67-4h16m-5-4 5 4-5 4"/>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="12" y="22" width="60" height="32"/><rect x="90" y="22" width="60" height="32"/><rect x="168" y="22" width="60" height="32"/><rect x="12" y="73" width="60" height="32"/><rect x="90" y="73" width="60" height="32"/><rect x="168" y="73" width="60" height="32"/></g>
+    <g fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" text-anchor="middle"><text x="42" y="43">A</text><text x="120" y="43">B</text><text x="198" y="43">C</text><text x="42" y="94">D</text><text x="120" y="94">E</text><text x="198" y="94">F</text></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M72 38h16m-5-4 5 4-5 4m67-4h16m-5-4 5 4-5 4"/>
   </symbol>
   <symbol id="hierarchy" viewBox="0 0 240 120">
     <text x="25" y="36" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" fill="#000">A</text>
@@ -106,52 +94,52 @@
     <path d="M151 28h55m-55 27h55m-55 27h55" stroke="#000" stroke-width="2"/>
   </symbol>
   <symbol id="export" viewBox="0 0 240 120">
-    <path class="frame" d="M22 13h68l16 16v77H22z"/><path class="line" d="M90 13v16h16"/><text class="bold" x="41" y="65">PDF</text><text class="small" x="31" y="83">or SVG</text>
-    <path class="guide" d="M115 60h26m-7-5 7 5-7 5"/><rect class="frame" x="151" y="26" width="65" height="67" rx="3"/><path class="guide" stroke-dasharray="4 3" d="M160 35h47v49h-47z"/><text class="small" x="158" y="66">Crop + label</text>
+    <path fill="#fff" stroke="#b6d2c4" stroke-width="2" d="M22 13h68l16 16v77H22z"/><path fill="none" stroke="#536a70" stroke-width="2" d="M90 13v16h16"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="41" y="65">PDF</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="31" y="83">or SVG</text>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M115 60h26m-7-5 7 5-7 5"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="151" y="26" width="65" height="67" rx="3"/><path fill="none" stroke="#167465" stroke-width="2" stroke-dasharray="4 3" d="M160 35h47v49h-47z"/><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="158" y="66">Crop + label</text>
   </symbol>
   <symbol id="inspect" viewBox="0 0 240 120">
-    <rect class="frame" x="18" y="17" width="122" height="86" rx="3"/><path class="line" d="M34 79V37m0 42h89M42 70l23-18 17 7 29-19"/>
-    <circle cx="175" cy="52" r="22" fill="#eaf5ee" stroke="#167465" stroke-width="3"/><path class="guide" d="M191 68l24 24"/><text class="small" x="155" y="56">100%</text>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="18" y="17" width="122" height="86" rx="3"/><path fill="none" stroke="#536a70" stroke-width="2" d="M34 79V37m0 42h89M42 70l23-18 17 7 29-19"/>
+    <circle cx="175" cy="52" r="22" fill="#eaf5ee" stroke="#167465" stroke-width="3"/><path fill="none" stroke="#167465" stroke-width="2" d="M191 68l24 24"/><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="155" y="56">100%</text>
   </symbol>
   <symbol id="plot-line" viewBox="0 0 240 120">
-    <path class="line" d="M34 15v82h185"/>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M34 15v82h185"/>
     <path d="M43 78l75-10 87-12" fill="none" stroke="#0173b2" stroke-width="3"/>
     <path d="M43 78l75-28 87-29" fill="none" stroke="#de8f05" stroke-width="3"/>
-    <g class="blue"><circle cx="43" cy="78" r="3"/><circle cx="118" cy="68" r="3"/><circle cx="205" cy="56" r="3"/></g>
-    <g class="orange"><circle cx="43" cy="78" r="3"/><circle cx="118" cy="50" r="3"/><circle cx="205" cy="21" r="3"/></g>
+    <g fill="#0173b2"><circle cx="43" cy="78" r="3"/><circle cx="118" cy="68" r="3"/><circle cx="205" cy="56" r="3"/></g>
+    <g fill="#de8f05"><circle cx="43" cy="78" r="3"/><circle cx="118" cy="50" r="3"/><circle cx="205" cy="21" r="3"/></g>
   </symbol>
   <symbol id="plot-strip" viewBox="0 0 240 120">
-    <path class="line" d="M34 15v82h185"/>
-    <g class="blue"><circle cx="83" cy="65" r="4"/><circle cx="92" cy="55" r="4"/><circle cx="78" cy="45" r="4"/><circle cx="88" cy="35" r="4"/></g>
-    <g class="orange"><circle cx="164" cy="52" r="4"/><circle cx="173" cy="44" r="4"/><circle cx="159" cy="32" r="4"/><circle cx="169" cy="23" r="4"/></g>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M34 15v82h185"/>
+    <g fill="#0173b2"><circle cx="83" cy="65" r="4"/><circle cx="92" cy="55" r="4"/><circle cx="78" cy="45" r="4"/><circle cx="88" cy="35" r="4"/></g>
+    <g fill="#de8f05"><circle cx="164" cy="52" r="4"/><circle cx="173" cy="44" r="4"/><circle cx="159" cy="32" r="4"/><circle cx="169" cy="23" r="4"/></g>
   </symbol>
   <symbol id="plot-scatter" viewBox="0 0 240 120">
-    <path class="line" d="M34 15v82h185"/>
-    <g class="blue"><circle cx="52" cy="78" r="4"/><circle cx="76" cy="66" r="4"/><circle cx="97" cy="72" r="4"/><circle cx="127" cy="51" r="4"/><circle cx="152" cy="57" r="4"/></g>
-    <g class="orange"><circle cx="87" cy="60" r="4"/><circle cx="116" cy="46" r="4"/><circle cx="142" cy="40" r="4"/><circle cx="165" cy="47" r="4"/><circle cx="193" cy="25" r="4"/></g>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M34 15v82h185"/>
+    <g fill="#0173b2"><circle cx="52" cy="78" r="4"/><circle cx="76" cy="66" r="4"/><circle cx="97" cy="72" r="4"/><circle cx="127" cy="51" r="4"/><circle cx="152" cy="57" r="4"/></g>
+    <g fill="#de8f05"><circle cx="87" cy="60" r="4"/><circle cx="116" cy="46" r="4"/><circle cx="142" cy="40" r="4"/><circle cx="165" cy="47" r="4"/><circle cx="193" cy="25" r="4"/></g>
   </symbol>
   <symbol id="plot-box" viewBox="0 0 240 120">
-    <path class="line" d="M34 15v82h185"/>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M34 15v82h185"/>
     <path d="M82 23v62m-12-62h24m-24 62h24M64 40h36v28H64zm0 14h36" fill="#dbeef7" stroke="#0173b2" stroke-width="2"/>
     <path d="M169 29v58m-12-58h24m-24 58h24M151 44h36v25h-36zm0 12h36" fill="#fff1d7" stroke="#b87700" stroke-width="2"/>
   </symbol>
   <symbol id="plot-histogram" viewBox="0 0 240 120">
-    <path class="line" d="M34 15v82h185"/>
+    <path fill="none" stroke="#536a70" stroke-width="2" d="M34 15v82h185"/>
     <g fill="#0173b2" fill-opacity=".65"><rect x="43" y="75" width="30" height="22"/><rect x="73" y="52" width="30" height="45"/><rect x="103" y="30" width="30" height="67"/><rect x="133" y="75" width="30" height="22"/></g>
     <g fill="#de8f05" fill-opacity=".55"><rect x="73" y="75" width="30" height="22"/><rect x="103" y="52" width="30" height="45"/><rect x="133" y="30" width="30" height="67"/><rect x="163" y="75" width="30" height="22"/></g>
   </symbol>
   <symbol id="evidence" viewBox="0 0 240 120">
-    <path class="frame" d="M22 14h72v92H22z"/><text class="bold" x="32" y="33">Data</text><path class="line" d="M32 44h52M32 56h52M32 68h52M32 80h52"/>
-    <path class="guide" d="M107 60h22m-6-5 6 5-6 5"/><rect class="frame" x="140" y="14" width="78" height="92" rx="3"/><text class="bold" x="151" y="33">Figure</text><text class="small" x="151" y="52">units ✓</text><text class="small" x="151" y="70">n ✓</text><text class="small" x="151" y="88">legend ✓</text>
+    <path fill="#fff" stroke="#b6d2c4" stroke-width="2" d="M22 14h72v92H22z"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="32" y="33">Data</text><path fill="none" stroke="#536a70" stroke-width="2" d="M32 44h52M32 56h52M32 68h52M32 80h52"/>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M107 60h22m-6-5 6 5-6 5"/><rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="140" y="14" width="78" height="92" rx="3"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="151" y="33">Figure</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="151" y="52">units ✓</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="151" y="70">n ✓</text><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="151" y="88">legend ✓</text>
   </symbol>
   <symbol id="protocol" viewBox="0 0 240 120">
-    <rect class="frame" x="38" y="12" width="164" height="96" rx="5"/><text class="bold" x="52" y="33">Study plan</text>
-    <g class="small"><text x="67" y="53">Groups</text><text x="67" y="72">Interventions</text><text x="67" y="91">Sampling times</text></g>
-    <path class="guide" d="m51 49 3 3 6-7m-9 23 3 3 6-7m-9 23 3 3 6-7"/>
+    <rect fill="#fff" stroke="#b6d2c4" stroke-width="2" x="38" y="12" width="164" height="96" rx="5"/><text fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="bold" x="52" y="33">Study plan</text>
+    <g fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9"><text x="67" y="53">Groups</text><text x="67" y="72">Interventions</text><text x="67" y="91">Sampling times</text></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="m51 49 3 3 6-7m-9 23 3 3 6-7m-9 23 3 3 6-7"/>
   </symbol>
   <symbol id="connect" viewBox="0 0 240 120">
-    <g class="frame"><rect x="20" y="28" width="72" height="46" rx="4"/><rect x="148" y="28" width="72" height="46" rx="4"/></g>
-    <g class="text" text-anchor="middle"><text x="56" y="56">Group</text><text x="184" y="56">Sample</text></g>
-    <path class="guide" d="M92 51h54m-7-5 7 5-7 5"/><text class="small" x="81" y="97">Line stays in the gap</text>
+    <g fill="#fff" stroke="#b6d2c4" stroke-width="2"><rect x="20" y="28" width="72" height="46" rx="4"/><rect x="148" y="28" width="72" height="46" rx="4"/></g>
+    <g fill="#172d35" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle"><text x="56" y="56">Group</text><text x="184" y="56">Sample</text></g>
+    <path fill="none" stroke="#167465" stroke-width="2" d="M92 51h54m-7-5 7 5-7 5"/><text fill="#536a70" font-family="Arial, Helvetica, sans-serif" font-size="9" x="81" y="97">Line stays in the gap</text>
   </symbol>
 </svg>

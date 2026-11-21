@@ -57,6 +57,7 @@ html.theme-wiping::view-transition-group(root) { animation: theme-wave-hold 1.2s
 html.theme-wiping::view-transition-old(root), html.theme-wiping::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html.theme-wiping::view-transition-new(root) { mask: url(#theme-wave-clip); }
 .theme-wave-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+.theme-fade-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; opacity: 0; }
 .nav-dropdown { position: relative; }
 .nav-dropdown summary { cursor: pointer; list-style: none; }
 .nav-dropdown summary::-webkit-details-marker { display: none; }

@@ -86,6 +86,31 @@
     );
   }
 
+  function fadeTheme(button) {
+    const overlay = document.createElement("div");
+    overlay.className = "theme-fade-overlay";
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.style.background = getComputedStyle(document.documentElement).getPropertyValue("--surface");
+    document.body.appendChild(overlay);
+    overlay.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 180, easing: "ease-in", fill: "forwards",
+    }).finished
+      .then(() => {
+        applyTheme();
+        return overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: 180, easing: "ease-out", fill: "forwards",
+        }).finished;
+      })
+      .catch((error) => {
+        console.warn("Theme transition was interrupted:", error);
+        applyTheme();
+      })
+      .finally(() => {
+        overlay.remove();
+        button.disabled = false;
+      });
+  }
+
   function switchTheme(button) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches
         || typeof button.animate !== "function") {
@@ -93,6 +118,11 @@
       return;
     }
     button.disabled = true;
+
+    if (window.matchMedia("(max-width: 750px)").matches) {
+      fadeTheme(button);
+      return;
+    }
 
     if (typeof document.startViewTransition === "function") {
       const wave = createWave(true);
